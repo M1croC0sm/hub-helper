@@ -1,0 +1,23 @@
+.gradle/
+.kotlin/
+.idea/
+build/
+**/build/
+local.properties
+*.iml
+captures/
+.DS_Store
+
+# Generated packages and signing material
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Private source scans; keep personal records out of repository history
+*.jpg
+*.jpeg
+*.png
+
+# Legacy scan stored with an incorrect Markdown extension
+Light Industrial Attendance Policy.md
