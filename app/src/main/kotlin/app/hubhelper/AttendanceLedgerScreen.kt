@@ -47,7 +47,7 @@ import app.hubhelper.domain.floatingHolidayAvailable
 import java.math.BigDecimal
 import java.time.LocalDate
 
-enum class RecordsSection { PTO, CALL_INS, SICK }
+enum class RecordsSection { PTO, CALL_INS, SICK, HOLIDAYS, HISTORY }
 
 @Composable
 fun AttendanceLedgerScreen(
@@ -84,6 +84,22 @@ fun AttendanceLedgerScreen(
     var callInDeleteCandidate by remember { mutableStateOf<CallInEvent?>(null) }
     var bookedPtoDeleteCandidate by remember { mutableStateOf<BookedPtoDay?>(null) }
     val summary = remember(events, appDate) { AttendanceCalculator().summarize(events, appDate) }
+    val ptoRequester = remember { BringIntoViewRequester() }
+    val callInRequester = remember { BringIntoViewRequester() }
+    val sickRequester = remember { BringIntoViewRequester() }
+    val holidayRequester = remember { BringIntoViewRequester() }
+    val historyRequester = remember { BringIntoViewRequester() }
+
+    LaunchedEffect(initialSection) {
+        when (initialSection) {
+            RecordsSection.PTO -> ptoRequester
+            RecordsSection.CALL_INS -> callInRequester
+            RecordsSection.SICK -> sickRequester
+            RecordsSection.HOLIDAYS -> holidayRequester
+            RecordsSection.HISTORY -> historyRequester
+            null -> null
+        }?.bringIntoView()
+    }
 
     Column(
         modifier = Modifier
@@ -139,12 +155,22 @@ fun AttendanceLedgerScreen(
             onAdd = onAddTimeAdjustment,
             onDelete = { timeDeleteCandidate = it },
             onDeleteCallIn = { callInDeleteCandidate = it },
-            initialSection = initialSection,
+            ptoRequester = ptoRequester,
+            callInRequester = callInRequester,
+            sickRequester = sickRequester,
         )
         BookedPtoSection(bookedPtoDays) { bookedPtoDeleteCandidate = it }
-        HolidaySection(holidays)
+        HolidaySection(
+            holidays = holidays,
+            modifier = Modifier.bringIntoViewRequester(holidayRequester),
+        )
 
-        Text("History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            "History",
+            modifier = Modifier.bringIntoViewRequester(historyRequester),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
         if (events.isEmpty()) {
             Text("No dated attendance events yet.")
         } else {
@@ -368,21 +394,11 @@ private fun TimeBalanceSection(
     onAdd: (LocalDate, TimeBalanceKind, Int, String?) -> Unit,
     onDelete: (TimeBalanceAdjustment) -> Unit,
     onDeleteCallIn: (CallInEvent) -> Unit,
-    initialSection: RecordsSection?,
+    ptoRequester: BringIntoViewRequester,
+    callInRequester: BringIntoViewRequester,
+    sickRequester: BringIntoViewRequester,
 ) {
     var showForm by remember { mutableStateOf(false) }
-    val ptoRequester = remember { BringIntoViewRequester() }
-    val callInRequester = remember { BringIntoViewRequester() }
-    val sickRequester = remember { BringIntoViewRequester() }
-
-    LaunchedEffect(initialSection) {
-        when (initialSection) {
-            RecordsSection.PTO -> ptoRequester
-            RecordsSection.CALL_INS -> callInRequester
-            RecordsSection.SICK -> sickRequester
-            null -> null
-        }?.bringIntoView()
-    }
 
     fun balance(opening: String, kind: TimeBalanceKind): String {
         return TimeOffCalculator.balanceHours(
@@ -556,8 +572,9 @@ private fun formatMinutesAsHours(minutes: Int): String =
 @Composable
 private fun HolidaySection(
     holidays: List<PlantHoliday>,
+    modifier: Modifier = Modifier,
 ) {
-    Text("Holidays", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    Text("Holidays", modifier = modifier, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Scan the annual holiday sheet in Documents using the Holiday calendar category.")

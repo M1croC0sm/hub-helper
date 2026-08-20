@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -194,7 +193,6 @@ fun HubHelperApp(
                         holidays = holidays,
                         workNotes = workNotes,
                         onLogSomething = { showGlobalLog = true },
-                        onViewRecords = { recordsSection = null; selectedArea = MainArea.RECORDS },
                         onViewRecordSection = { section -> recordsSection = section; selectedArea = MainArea.RECORDS },
                     )
                     MainArea.RECORDS -> AttendanceLedgerScreen(
@@ -412,10 +410,8 @@ private fun HomeScreen(
     holidays: List<app.hubhelper.domain.PlantHoliday>,
     workNotes: List<app.hubhelper.domain.WorkNote>,
     onLogSomething: () -> Unit,
-    onViewRecords: () -> Unit,
     onViewRecordSection: (RecordsSection) -> Unit,
 ) {
-    var showWhy by remember { mutableStateOf(false) }
     val datedSummary = remember(events, appDate) { AttendanceCalculator().summarize(events, appDate) }
     val nextCreditDate = remember(events, appDate) { AttendanceCalculator().nextAttendanceCreditDate(events, appDate) }
     val opening = setupData.attendanceOpeningRemainder.toBigDecimalOrNull() ?: BigDecimal.ZERO
@@ -453,14 +449,10 @@ private fun HomeScreen(
     Column(
         modifier = Modifier
             .padding(padding)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            SectionLabel("Situation report", color = MaterialTheme.colorScheme.primary)
-            StatusBadge("Private • Offline", HubColors.Green)
-        }
         if (isDateOverridden) {
             IndustrialPanel(modifier = Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
                 Text(
@@ -505,11 +497,6 @@ private fun HomeScreen(
                     ProvenanceBadge("Estimated", Modifier.padding(top = 5.dp))
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onViewRecords, modifier = Modifier.weight(1f)) { Text("VIEW DETAILS") }
-                TextButton(onClick = { showWhy = true }, modifier = Modifier.weight(1f)) { Text("WHY?") }
-            }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -547,7 +534,11 @@ private fun HomeScreen(
             }
         }
 
-        IndustrialPanel(Modifier.fillMaxWidth()) {
+        IndustrialPanel(
+            Modifier
+                .fillMaxWidth()
+                .clickable { onViewRecordSection(RecordsSection.HOLIDAYS) },
+        ) {
             SectionLabel("Next holiday", color = Color(0xFFD9BF66))
             if (nextHoliday == null) {
                 Text("No reviewed holiday loaded", style = MaterialTheme.typography.titleMedium)
@@ -560,7 +551,11 @@ private fun HomeScreen(
             }
         }
 
-        IndustrialPanel(Modifier.fillMaxWidth()) {
+        IndustrialPanel(
+            Modifier
+                .fillMaxWidth()
+                .clickable { onViewRecordSection(RecordsSection.HISTORY) },
+        ) {
             SectionLabel("Recent activity")
             val attendanceRecent = events.sortedByDescending { it.occurredOn }.take(3)
             val timeRecent = timeAdjustments.sortedByDescending { it.occurredOn }.take(2)
@@ -579,23 +574,11 @@ private fun HomeScreen(
             }
             callInRecent.forEach { event -> ActivityRow(event.occurredOn, "call-in day", "−${event.ptoMinutes / 60} h PTO", "excused") }
             noteRecent.forEach { note -> ActivityRow(note.date, "work note", "", "user") }
-            TextButton(onClick = onViewRecords) { Text("VIEW ALL ACTIVITY  ›") }
         }
         Button(onClick = onLogSomething, modifier = Modifier.fillMaxWidth()) { Text("+  LOG SOMETHING") }
         Text("Unofficial employee reference • Original records remain authoritative", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
-    if (showWhy) {
-        AttendanceExplanationDialog(
-            appDate = appDate,
-            opening = setupData.attendanceOpeningRemainder,
-            balancesAsOf = setupData.balancesAsOfDate,
-            total = currentTotal,
-            events = events,
-            nextExpiration = datedSummary.nextExpirationDate,
-            onDismiss = { showWhy = false },
-        )
-    }
 }
 
 @Composable
@@ -636,55 +619,6 @@ private fun ActivityRow(date: LocalDate, label: String, change: String, status: 
         Text(change, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(.7f))
         Text(status.uppercase(), style = MaterialTheme.typography.labelMedium, color = if (status == "confirmed") HubColors.Green else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
     }
-}
-
-@Composable
-private fun AttendanceExplanationDialog(
-    appDate: LocalDate,
-    opening: String,
-    balancesAsOf: String,
-    total: String,
-    events: List<app.hubhelper.domain.AttendanceEvent>,
-    nextExpiration: LocalDate?,
-    onDismiss: () -> Unit,
-) {
-    val calculator = AttendanceCalculator()
-    val included = events.filter {
-        it.status == app.hubhelper.domain.AttendanceEventStatus.CONFIRMED && !it.occurredOn.isAfter(appDate) &&
-            (it.type == app.hubhelper.domain.AttendanceEventType.ATTENDANCE_CREDIT || appDate.isBefore(calculator.expiresOn(it)))
-    }
-    val excluded = events.filterNot(included::contains)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("WHY THIS TOTAL?") },
-        text = {
-            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                ProvenanceBadge("Calculated")
-                Text("Current total = opening balance + active confirmed charges − confirmed credits")
-                IndustrialPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
-                    SectionLabel("Calculated current total")
-                    MetricValue(total, "POINTS")
-                    Text("Opening: ${opening.ifBlank { "0" }} • balance date ${runCatching { LocalDate.parse(balancesAsOf).monthDayYear() }.getOrDefault(balancesAsOf)}")
-                    Text("Next expiration: ${nextExpiration?.monthDayYear() ?: "unknown"}")
-                }
-                SectionLabel("Included events", color = HubColors.Green)
-                if (included.isEmpty()) Text("No active confirmed dated events.")
-                included.sortedByDescending { it.occurredOn }.forEach { event ->
-                    Text("${event.occurredOn.monthDayYear()} • ${event.type.name.lowercase().replace('_', ' ')} • ${event.points.asDisplayValue()} • ${if (event.source == null) "USER" else "SOURCE"}")
-                }
-                SectionLabel("Excluded / informational")
-                if (excluded.isEmpty()) Text("None")
-                excluded.sortedByDescending { it.occurredOn }.forEach { event ->
-                    Text("${event.occurredOn.monthDayYear()} • ${event.type.name.lowercase().replace('_', ' ')} • ${event.status.name.lowercase()}")
-                }
-                SectionLabel("Rules and assumptions")
-                Text("Confirmed charges expire on their 12-month anniversary. Credit events do not expire. Opening balances without dated rows have unknown individual falloff dates.")
-                StatusBadge("Review", MaterialTheme.colorScheme.primary)
-                Text("The exact 90-day processing boundary and reported seven-points-twice rule remain unverified. Estimated credit dates do not create a credit automatically.")
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("DONE") } },
-    )
 }
 
 @Composable
@@ -826,7 +760,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.7.7 • build 20", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.7.8 • build 21", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1047,7 +981,7 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "Getting started",
-            "Choose dates from the calendar; dates are displayed as month/day/year. Enter your hire date, shift, current PTO and sick balances, call-ins remaining, and current attendance points. Current points are always entered manually. Setup remains editable under Settings.",
+            "Choose dates from the calendar; dates are displayed as month/day/year. Enter your hire date, shift, current PTO and sick balances, call-ins remaining, and current attendance points. Current points are always entered manually. Setup remains editable under Settings. On Home, tap a balance panel, Next holiday, or Recent activity to open its matching Records section.",
         )
         ManualSection(
             "Attendance calculations",
@@ -1077,7 +1011,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Privacy",
             "Data stays in app-private storage. Cloud backup and network access are disabled. Export is explicit and user initiated. Settings also includes a persistent dark-mode switch.",
         )
-        Text("Manual for Hubb Helper 0.7.7", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.7.8", style = MaterialTheme.typography.bodySmall)
     }
 }
 
