@@ -698,6 +698,7 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Appearance and privacy", style = MaterialTheme.typography.titleMedium)
+        Text("Theme: Industrial", style = MaterialTheme.typography.labelLarge)
         Text("Cloud backup and network access are disabled.")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Switch(checked = darkMode, onCheckedChange = onDarkModeChanged)
@@ -760,7 +761,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.7.8 • build 21", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.7.9 • build 22", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1011,7 +1012,11 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Privacy",
             "Data stays in app-private storage. Cloud backup and network access are disabled. Export is explicit and user initiated. Settings also includes a persistent dark-mode switch.",
         )
-        Text("Manual for Hubb Helper 0.7.8", style = MaterialTheme.typography.bodySmall)
+        ManualSection(
+            "Appearance",
+            "Industrial is the current theme. Its headings, labels, and numeric readouts use an offline dot-matrix display face, while longer text uses a conventional typeface for readability. Dark and light modes remain available.",
+        )
+        Text("Manual for Hubb Helper 0.7.9", style = MaterialTheme.typography.bodySmall)
     }
 }
 

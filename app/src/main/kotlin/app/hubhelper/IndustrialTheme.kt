@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,14 +77,18 @@ private val IndustrialLightColors = lightColorScheme(
     error = Color(0xFFB3261E),
 )
 
+private val IndustrialDisplayFont = FontFamily(
+    Font(R.font.doto_black, weight = FontWeight.Black),
+)
+
 private val IndustrialTypography = Typography(
-    headlineLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 48.sp),
-    headlineMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 30.sp),
-    headlineSmall = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 23.sp),
-    titleLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 21.sp),
-    titleMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, letterSpacing = 1.sp),
-    labelMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 12.sp, letterSpacing = 0.8.sp),
+    headlineLarge = TextStyle(fontFamily = IndustrialDisplayFont, fontWeight = FontWeight.Black, fontSize = 48.sp),
+    headlineMedium = TextStyle(fontFamily = IndustrialDisplayFont, fontWeight = FontWeight.Black, fontSize = 30.sp),
+    headlineSmall = TextStyle(fontFamily = IndustrialDisplayFont, fontWeight = FontWeight.Black, fontSize = 23.sp),
+    titleLarge = TextStyle(fontFamily = IndustrialDisplayFont, fontWeight = FontWeight.Black, fontSize = 21.sp),
+    titleMedium = TextStyle(fontFamily = IndustrialDisplayFont, fontWeight = FontWeight.Black, fontSize = 17.sp),
+    labelLarge = TextStyle(fontFamily = IndustrialDisplayFont, fontWeight = FontWeight.Black, fontSize = 14.sp, letterSpacing = 0.5.sp),
+    labelMedium = TextStyle(fontFamily = IndustrialDisplayFont, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 0.4.sp),
 )
 
 @Composable

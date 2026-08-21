@@ -6,3 +6,6 @@ Any future open-source software license applies only to original program source 
 
 Before public release, all bundled workplace reference content must either have documented redistribution permission or be removed from the repository and its Git history.
 
+## Bundled font
+
+The Industrial theme bundles the Doto Black font, copyright 2024 The Doto Project Authors. Doto is distributed under the SIL Open Font License 1.1. The complete license is packaged at `app/src/main/res/raw/doto_ofl.txt`, and the upstream project is https://github.com/oliverlalan/Doto.
