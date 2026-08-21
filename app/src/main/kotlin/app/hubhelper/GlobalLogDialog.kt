@@ -4,12 +4,20 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -17,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import app.hubhelper.domain.AttendanceEventStatus
 import app.hubhelper.domain.AttendanceEventType
@@ -81,53 +93,66 @@ fun GlobalLogDialog(
         }
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Column {
-                SectionLabel("Quick input", color = MaterialTheme.colorScheme.primary)
-                Text(if (step == LogStep.MENU) "+ LOG" else logStepTitle(step), style = MaterialTheme.typography.titleLarge)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(top = 8.dp, bottom = 8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { if (step == LogStep.MENU) onDismiss() else step = LogStep.MENU }) {
+                        Text(if (step == LogStep.MENU) "Close" else "‹ Back")
+                    }
+                    Text(
+                        if (step == LogStep.MENU) "LOG EVENT" else logStepTitle(step),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = HubThemeDesign.tokens.screenPadding, vertical = 10.dp),
+                ) {
+                    when (step) {
+                        LogStep.MENU -> LogMenu { step = it }
+                        LogStep.ATTENDANCE -> QuickAttendanceForm(appDate) { date, type, points, status, note ->
+                            onAttendance(date, type, points, status, note)
+                            onDismiss()
+                        }
+                        LogStep.TIME -> QuickTimeForm(appDate, shiftPreset, birthdayMonth, timeAdjustments, bookedPtoDays) { date, kind, minutes, note ->
+                            onTimeUsed(date, kind, minutes, note)
+                            onDismiss()
+                        }
+                        LogStep.CALL_IN -> QuickCallInForm(appDate, shiftPreset, callInsRemainingForYear) { date, ptoMinutes ->
+                            onCallIn(date, ptoMinutes)
+                            onDismiss()
+                        }
+                        LogStep.BOOKED_PTO -> QuickBookedPtoForm(appDate, birthdayMonth, bookedPtoDays, timeAdjustments) { date, type ->
+                            onBookPto(date, type)
+                            onDismiss()
+                        }
+                        LogStep.NOTE -> QuickNoteForm(appDate) { note -> onNote(appDate, note); onDismiss() }
+                        LogStep.DOCUMENT -> QuickDocumentForm(
+                            category = documentCategory,
+                            onCategory = { documentCategory = it },
+                            onCamera = { camera.launch(cameraUri) },
+                            onChoose = { picker.launch(arrayOf("image/*", "application/pdf")) },
+                        )
+                        LogStep.WEEK_DONE -> WeekDoneForm(appDate) {
+                            onNote(appDate, "Weekly review complete — no additional items to log.")
+                            onDismiss()
+                        }
+                    }
+                }
             }
-        },
-        text = {
-            when (step) {
-                LogStep.MENU -> LogMenu { step = it }
-                LogStep.ATTENDANCE -> QuickAttendanceForm(appDate) { date, type, points, status, note ->
-                    onAttendance(date, type, points, status, note)
-                    onDismiss()
-                }
-                LogStep.TIME -> QuickTimeForm(appDate, shiftPreset, birthdayMonth, timeAdjustments, bookedPtoDays) { date, kind, minutes, note ->
-                    onTimeUsed(date, kind, minutes, note)
-                    onDismiss()
-                }
-                LogStep.CALL_IN -> QuickCallInForm(appDate, shiftPreset, callInsRemainingForYear) { date, ptoMinutes ->
-                    onCallIn(date, ptoMinutes)
-                    onDismiss()
-                }
-                LogStep.BOOKED_PTO -> QuickBookedPtoForm(appDate, birthdayMonth, bookedPtoDays, timeAdjustments) { date, type ->
-                    onBookPto(date, type)
-                    onDismiss()
-                }
-                LogStep.NOTE -> QuickNoteForm(appDate) { note -> onNote(appDate, note); onDismiss() }
-                LogStep.DOCUMENT -> QuickDocumentForm(
-                    category = documentCategory,
-                    onCategory = { documentCategory = it },
-                    onCamera = { camera.launch(cameraUri) },
-                    onChoose = { picker.launch(arrayOf("image/*", "application/pdf")) },
-                )
-                LogStep.WEEK_DONE -> WeekDoneForm(appDate) {
-                    onNote(appDate, "Weekly review complete — no additional items to log.")
-                    onDismiss()
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = { if (step == LogStep.MENU) onDismiss() else step = LogStep.MENU }) {
-                Text(if (step == LogStep.MENU) "Close" else "Back")
-            }
-        },
-    )
+        }
+    }
 }
 
 private fun logStepTitle(step: LogStep): String = when (step) {
@@ -143,15 +168,17 @@ private fun logStepTitle(step: LogStep): String = when (step) {
 
 @Composable
 private fun LogMenu(onSelect: (LogStep) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        Text("What happened?", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        LogMenuButton("Attendance issue", "Absence, tardy, left early, or call-in violation") { onSelect(LogStep.ATTENDANCE) }
-        LogMenuButton("Call-in day", "Use one of five excused days and one PTO day") { onSelect(LogStep.CALL_IN) }
-        LogMenuButton("PTO / sick time used", "Record time against a balance") { onSelect(LogStep.TIME) }
-        LogMenuButton("Booked PTO", "Remember a future vacation day") { onSelect(LogStep.BOOKED_PTO) }
-        LogMenuButton("Work note", "Save a dated personal note") { onSelect(LogStep.NOTE) }
-        LogMenuButton("Scan / import document", "Attach evidence from your phone") { onSelect(LogStep.DOCUMENT) }
-        LogMenuButton("My week is up to date", "Record that you completed your review") { onSelect(LogStep.WEEK_DONE) }
+    val design = HubThemeDesign.tokens
+    Column(verticalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
+        SectionLabel("What happened?", color = MaterialTheme.colorScheme.primary)
+        LogMenuButton("●", design.pto, "Attendance issue", "Tardy, absence, left early, etc.") { onSelect(LogStep.ATTENDANCE) }
+        LogMenuButton("◷", design.good, "PTO / sick time used", "Record time off used") { onSelect(LogStep.TIME) }
+        LogMenuButton("▤", design.attention, "Work note", "Add a personal work note") { onSelect(LogStep.NOTE) }
+        LogMenuButton("▱", design.document, "Scan / import document", "Add a photo or document") { onSelect(LogStep.DOCUMENT) }
+        LogMenuButton("✓", design.good, "My week is up to date", "Mark weekly review complete") { onSelect(LogStep.WEEK_DONE) }
+        SectionLabel("More log options")
+        LogMenuButton("☎", design.attention, "Call-in day", "Use one excused call-in and one PTO day") { onSelect(LogStep.CALL_IN) }
+        LogMenuButton("＋", design.pto, "Book future PTO", "Remember a future vacation day") { onSelect(LogStep.BOOKED_PTO) }
     }
 }
 
@@ -201,7 +228,7 @@ private fun QuickCallInForm(
     val ptoHours = if (shiftPreset == "SECOND") 10 else 8
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DatePickerField("Call-in date", date, { it?.let { selected -> date = selected } })
-        StatusBadge("$remaining of 5 left", if (remaining > 1) HubColors.Green else MaterialTheme.colorScheme.error)
+        StatusBadge("$remaining of 5 left", if (remaining > 1) HubThemeDesign.tokens.good else MaterialTheme.colorScheme.error)
         Text("This records an excused call-in day and deducts $ptoHours PTO hours for your ${if (shiftPreset == "SECOND") "second" else "first"} shift.")
         Text("It does not add an attendance point.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(
@@ -213,11 +240,19 @@ private fun QuickCallInForm(
 }
 
 @Composable
-private fun LogMenuButton(title: String, detail: String, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-            Text(title)
-            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun LogMenuButton(icon: String, color: androidx.compose.ui.graphics.Color, title: String, detail: String, onClick: () -> Unit) {
+    HubPanel(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(shape = CircleShape, color = color.copy(alpha = 0.18f), modifier = Modifier.size(42.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text(icon, color = color, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -15,6 +16,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -46,8 +48,11 @@ import app.hubhelper.domain.BookedTimeType
 import app.hubhelper.domain.floatingHolidayAvailable
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 
-enum class RecordsSection { PTO, CALL_INS, SICK, HOLIDAYS, HISTORY }
+enum class RecordsSection { DETAILS, PTO, CALL_INS, SICK, HOLIDAYS, HISTORY }
+private enum class AttendanceFilter(val label: String) { ALL("All"), CONFIRMED("Confirmed"), PENDING("Pending"), CREDITS("Credits") }
 
 @Composable
 fun AttendanceLedgerScreen(
@@ -75,15 +80,18 @@ fun AttendanceLedgerScreen(
     holidays: List<PlantHoliday>,
     onAddHoliday: (LocalDate, String) -> Unit,
     onDeleteHoliday: (PlantHoliday) -> Unit,
+    onViewRules: () -> Unit,
     initialSection: RecordsSection? = null,
 ) {
+    val design = HubThemeDesign.tokens
     var showForm by remember { mutableStateOf(false) }
     var deleteCandidate by remember { mutableStateOf<AttendanceEvent?>(null) }
     var editCandidate by remember { mutableStateOf<AttendanceEvent?>(null) }
     var timeDeleteCandidate by remember { mutableStateOf<TimeBalanceAdjustment?>(null) }
     var callInDeleteCandidate by remember { mutableStateOf<CallInEvent?>(null) }
     var bookedPtoDeleteCandidate by remember { mutableStateOf<BookedPtoDay?>(null) }
-    val summary = remember(events, appDate) { AttendanceCalculator().summarize(events, appDate) }
+    var attendanceFilter by remember { mutableStateOf(AttendanceFilter.ALL) }
+    val detailsRequester = remember { BringIntoViewRequester() }
     val ptoRequester = remember { BringIntoViewRequester() }
     val callInRequester = remember { BringIntoViewRequester() }
     val sickRequester = remember { BringIntoViewRequester() }
@@ -92,6 +100,7 @@ fun AttendanceLedgerScreen(
 
     LaunchedEffect(initialSection) {
         when (initialSection) {
+            RecordsSection.DETAILS -> detailsRequester
             RecordsSection.PTO -> ptoRequester
             RecordsSection.CALL_INS -> callInRequester
             RecordsSection.SICK -> sickRequester
@@ -104,25 +113,18 @@ fun AttendanceLedgerScreen(
     Column(
         modifier = Modifier
             .padding(padding)
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = design.screenPadding)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(design.contentSpacing),
     ) {
-        Text("As of $appDate", style = MaterialTheme.typography.labelLarge)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Opening balance: ${openingBalance.ifBlank { "Not set" }}")
-                Text("Confirmed dated events: ${summary.confirmedPoints.asDisplayValue()}")
-                Text("Pending events: ${summary.pendingEventCount}")
-                Text("Next dated falloff: ${summary.nextExpirationDate ?: "Unknown"}")
-                if (openingBalance.isNotBlank()) {
-                    Text(
-                        "The opening balance has no individual dates, so its falloffs remain unknown.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        }
+        AttendanceDetailsPanels(
+            appDate,
+            openingBalance,
+            balancesAsOfDate,
+            events,
+            onViewRules,
+            Modifier.bringIntoViewRequester(detailsRequester),
+        )
 
         Button(onClick = { showForm = !showForm }, modifier = Modifier.fillMaxWidth()) {
             Text(if (showForm) "Close event form" else "Add attendance event")
@@ -166,21 +168,44 @@ fun AttendanceLedgerScreen(
         )
 
         Text(
-            "History",
+            "Records — Attendance",
             modifier = Modifier.bringIntoViewRequester(historyRequester),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        if (events.isEmpty()) {
-            Text("No dated attendance events yet.")
-        } else {
-            events.forEach { event ->
-                AttendanceEventCard(
-                    event,
-                    AttendanceCalculator().expiresOn(event),
-                    onEdit = { editCandidate = event; showForm = false },
-                    onDelete = { deleteCandidate = event },
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AttendanceFilter.entries.forEach { filter ->
+                FilterChip(
+                    selected = attendanceFilter == filter,
+                    onClick = { attendanceFilter = filter },
+                    label = { Text(filter.label) },
                 )
+            }
+        }
+        val filteredEvents = events.filter { event ->
+            when (attendanceFilter) {
+                AttendanceFilter.ALL -> true
+                AttendanceFilter.CONFIRMED -> event.status == AttendanceEventStatus.CONFIRMED
+                AttendanceFilter.PENDING -> event.status == AttendanceEventStatus.PENDING
+                AttendanceFilter.CREDITS -> event.type == AttendanceEventType.ATTENDANCE_CREDIT
+            }
+        }.sortedByDescending { it.occurredOn }
+        if (filteredEvents.isEmpty()) {
+            Text(if (events.isEmpty()) "No dated attendance events yet." else "No records match this filter.")
+        } else {
+            filteredEvents.groupBy { YearMonth.from(it.occurredOn) }.forEach { (month, monthEvents) ->
+                SectionLabel(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), color = MaterialTheme.colorScheme.primary)
+                monthEvents.forEach { event ->
+                    AttendanceEventCard(
+                        event,
+                        AttendanceCalculator().expiresOn(event),
+                        onEdit = { editCandidate = event; showForm = false },
+                        onDelete = { deleteCandidate = event },
+                    )
+                }
             }
         }
     }
@@ -234,6 +259,86 @@ fun AttendanceLedgerScreen(
             },
             dismissButton = { TextButton(onClick = { bookedPtoDeleteCandidate = null }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun AttendanceDetailsPanels(
+    appDate: LocalDate,
+    openingBalance: String,
+    balancesAsOfDate: String,
+    events: List<AttendanceEvent>,
+    onViewRules: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val calculator = remember { AttendanceCalculator() }
+    val summary = remember(events, appDate) { calculator.summarize(events, appDate) }
+    val breakdown = remember(events, appDate) { calculator.breakdown(events, appDate) }
+    val opening = openingBalance.toBigDecimalOrNull() ?: BigDecimal.ZERO
+    val datedNet = BigDecimal(summary.confirmedPoints.value).divide(BigDecimal(2))
+    val total = opening.add(datedNet)
+    val totalText = total.stripTrailingZeros().toPlainString()
+    val design = HubThemeDesign.tokens
+    val risk = when (app.hubhelper.domain.attendanceColorBand(total)) {
+        app.hubhelper.domain.AttendanceColorBand.GREEN -> Triple("Low risk", "Good standing", design.good)
+        app.hubhelper.domain.AttendanceColorBand.ORANGE -> Triple("Watch", "Review upcoming changes", design.attention)
+        app.hubhelper.domain.AttendanceColorBand.RED -> Triple("High risk", "Attendance points above five", MaterialTheme.colorScheme.error)
+    }
+    val nextExpirationAmount = summary.nextExpirationDate?.let { date ->
+        breakdown.includedEvents.filter {
+            it.type != AttendanceEventType.ATTENDANCE_CREDIT && calculator.expiresOn(it) == date
+        }.sumOf { it.points.value }
+    }
+    val nextCredit = remember(events, appDate) { calculator.nextAttendanceCreditDate(events, appDate) }
+
+    HubPanel(modifier.fillMaxWidth(), accent = risk.third) {
+        SectionLabel("Current total")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            MetricValue(totalText, "POINTS", risk.third)
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                StatusBadge(risk.first, risk.third)
+                Text(risk.second, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+    HubPanel(Modifier.fillMaxWidth()) {
+        SectionLabel("How this total is calculated")
+        CalculationRow("Opening balance (as of ${runCatching { LocalDate.parse(balancesAsOfDate).monthDayYear() }.getOrDefault(balancesAsOfDate)})", opening.stripTrailingZeros().toPlainString())
+        CalculationRow("Confirmed charges", "+${breakdown.confirmedCharges.asDisplayValue()}")
+        CalculationRow("Confirmed credits", "−${breakdown.confirmedCredits.asDisplayValue()}")
+        HorizontalDivider(Modifier.padding(vertical = 5.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f))
+        CalculationRow("Total", totalText, emphasized = true)
+        Text(
+            "${breakdown.includedEvents.size} included • ${breakdown.excludedEvents.size} informational or excluded • ${summary.pendingEventCount} pending",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (openingBalance.isNotBlank()) {
+            Text("The manually entered opening balance has no individual dates, so its falloffs remain unknown.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    HubPanel(Modifier.fillMaxWidth()) {
+        SectionLabel("Upcoming")
+        CalculationRow(
+            summary.nextExpirationDate?.monthDayYear() ?: "No dated falloff",
+            nextExpirationAmount?.let { "−${HalfPoints(it).asDisplayValue()}" }.orEmpty(),
+            emphasized = summary.nextExpirationDate != null,
+        )
+        if (summary.nextExpirationDate != null) Text("Point expires", style = MaterialTheme.typography.bodySmall)
+        HorizontalDivider(Modifier.padding(vertical = 5.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+        SectionLabel("Estimated 90-day credit", color = design.pto)
+        CalculationRow(nextCredit?.monthDayYear() ?: "Unknown", "Estimated")
+    }
+    OutlinedButton(onClick = onViewRules, modifier = Modifier.fillMaxWidth()) {
+        Text("VIEW SOURCE & RULES  ›")
+    }
+}
+
+@Composable
+private fun CalculationRow(label: String, value: String, emphasized: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, modifier = Modifier.weight(1f), style = if (emphasized) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyMedium)
+        Text(value, style = if (emphasized) HubThemeDesign.tokens.metricMedium.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize) else MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -360,13 +465,21 @@ private fun AttendanceEventCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("${event.occurredOn} • ${event.type.name.lowercase().replace('_', ' ')}", fontWeight = FontWeight.SemiBold)
-            Text("${event.points.asDisplayValue()} points • ${event.status.name.lowercase()}")
+    val statusColor = if (event.status == AttendanceEventStatus.CONFIRMED) HubThemeDesign.tokens.good else MaterialTheme.colorScheme.onSurfaceVariant
+    HubPanel(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(event.occurredOn.monthDayYear(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1.1f))
+                Text(attendanceTypeLabel(event.type), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1.5f))
+                Text(
+                    (if (event.type == AttendanceEventType.ATTENDANCE_CREDIT) "−" else "+") + event.points.asDisplayValue(),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            Text(event.status.name.lowercase().replaceFirstChar(Char::uppercase), color = statusColor, style = MaterialTheme.typography.labelMedium)
             Text(
                 if (event.type == AttendanceEventType.ATTENDANCE_CREDIT) "Credit adjustment; no annual falloff"
-                else "12-month falloff: $expiration",
+                else "12-month falloff: ${expiration.monthDayYear()}",
                 style = MaterialTheme.typography.bodySmall,
             )
             event.note?.let { Text(it) }
@@ -376,6 +489,14 @@ private fun AttendanceEventCard(
             }
         }
     }
+}
+
+private fun attendanceTypeLabel(type: AttendanceEventType): String = when (type) {
+    AttendanceEventType.UNEXCUSED_ABSENCE -> "Absence"
+    AttendanceEventType.TARDY -> "Tardy"
+    AttendanceEventType.LEFT_EARLY -> "Left early"
+    AttendanceEventType.CALL_IN_VIOLATION -> "Call-in violation"
+    AttendanceEventType.ATTENDANCE_CREDIT -> "Attendance credit"
 }
 
 @Composable

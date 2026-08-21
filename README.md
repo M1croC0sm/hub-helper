@@ -18,7 +18,9 @@ are reliable.
 The Android/Compose app now includes persistent attendance and time-balance
 ledgers, schedule presets, holidays, notes, a private OCR document library,
 offline contract/policy search, reminders, backup export, app lock, and tested
-policy calculations. Automatic 90-day credit timing and full printout-row import
+policy calculations. Its shared Compose UI includes Industrial Instrument,
+Clear & Easy, and Soft & Friendly themes with system, light, and dark modes.
+Automatic 90-day credit timing and full printout-row import
 remain under review.
 
 - Product and implementation plan: [`PLAN.md`](PLAN.md)

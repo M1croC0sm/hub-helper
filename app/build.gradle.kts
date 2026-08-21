@@ -11,8 +11,8 @@ android {
         applicationId = "app.hubhelper"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.7.9"
+        versionCode = 23
+        versionName = "0.8.0"
     }
 
     buildTypes {
@@ -35,7 +35,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    sourceSets.getByName("main").assets.srcDir(file("build/generated/referenceAssets"))
+    sourceSets.getByName("main").assets.directories.add("build/generated/referenceAssets")
 }
 
 val prepareReferenceAssets by tasks.registering(Sync::class) {

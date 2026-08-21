@@ -8,4 +8,8 @@ Before public release, all bundled workplace reference content must either have 
 
 ## Bundled font
 
-The Industrial theme bundles the Doto Black font, copyright 2024 The Doto Project Authors. Doto is distributed under the SIL Open Font License 1.1. The complete license is packaged at `app/src/main/res/raw/doto_ofl.txt`, and the upstream project is https://github.com/oliverlalan/Doto.
+The theme system bundles Barlow Condensed, Nunito Sans, and Roboto Mono. Each font is distributed under the SIL Open Font License 1.1. Complete licenses are packaged in `app/src/main/res/raw/` as `barlow_condensed_ofl.txt`, `nunito_sans_ofl.txt`, and `roboto_mono_ofl.txt`.
+
+- Barlow Condensed: copyright The Barlow Project Authors; https://github.com/jpt/barlow
+- Nunito Sans: copyright The Nunito Sans Project Authors; https://github.com/Fonthausen/NunitoSans
+- Roboto Mono: copyright The Roboto Mono Project Authors; https://github.com/googlefonts/RobotoMono

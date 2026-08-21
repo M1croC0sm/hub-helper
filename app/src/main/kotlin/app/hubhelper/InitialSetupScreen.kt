@@ -40,6 +40,7 @@ import java.util.UUID
 
 @Composable
 fun InitialSetupScreen(
+    theme: HubTheme,
     darkMode: Boolean,
     initialData: SetupData,
     canCancel: Boolean,
@@ -79,7 +80,7 @@ fun InitialSetupScreen(
     } == true
     val callInsValid = callInsRemaining.isBlank() || callInsRemaining.toIntOrNull() in 0..5
 
-    HubHelperTheme(darkMode) {
+    HubHelperTheme(theme, darkMode) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier

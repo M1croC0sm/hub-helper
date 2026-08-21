@@ -32,8 +32,8 @@ fun appLockPromptInfo(): BiometricPrompt.PromptInfo = BiometricPrompt.PromptInfo
     .build()
 
 @Composable
-fun AppLockedScreen(darkMode: Boolean, onUnlock: () -> Unit) {
-    HubHelperTheme(darkMode) {
+fun AppLockedScreen(theme: HubTheme, darkMode: Boolean, onUnlock: () -> Unit) {
+    HubHelperTheme(theme, darkMode) {
         Surface(Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(32.dp),

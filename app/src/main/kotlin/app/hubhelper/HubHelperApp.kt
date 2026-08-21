@@ -1,13 +1,16 @@
 package app.hubhelper
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -37,7 +40,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.hubhelper.data.AttendanceRepository
@@ -63,6 +70,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
@@ -103,8 +111,11 @@ fun HubHelperApp(
     onReminderChanged: (ReminderPreference) -> Unit,
     appLockEnabled: Boolean,
     onAppLockChanged: (Boolean) -> Unit,
+    selectedTheme: HubTheme,
+    onThemeChanged: (HubTheme) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChanged: (ThemeMode) -> Unit,
     darkMode: Boolean,
-    onDarkModeChanged: (Boolean) -> Unit,
     onImportBackup: (Uri) -> Unit,
     onResetApp: () -> Unit,
     lastAcknowledgedYear: Int,
@@ -140,43 +151,44 @@ fun HubHelperApp(
         )
     }
 
-    HubHelperTheme(darkMode) {
+    HubHelperTheme(selectedTheme, darkMode) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 topBar = {
                     TopAppBar(
                         title = {
-                            Column {
-                                Text("HUBB HELPER", style = MaterialTheme.typography.titleLarge)
-                                SectionLabel(selectedArea.label, color = MaterialTheme.colorScheme.primary)
+                            val title = when {
+                                selectedArea == MainArea.HOME -> "HUBB HELPER"
+                                selectedArea == MainArea.RECORDS && recordsSection == RecordsSection.DETAILS -> "Attendance details"
+                                selectedArea == MainArea.RECORDS && recordsSection == RecordsSection.HISTORY -> "Records (Attendance)"
+                                else -> selectedArea.label
                             }
+                            Text(title, style = MaterialTheme.typography.titleLarge)
                         },
                         actions = {
-                            TextButton(onClick = {
+                            TextButton(
+                                modifier = Modifier.semantics { contentDescription = if (selectedArea == MainArea.SETTINGS || selectedArea == MainArea.MANUAL) "Return to Home" else "Open Settings" },
+                                onClick = {
                                 selectedArea = when (selectedArea) {
-                                    MainArea.SETTINGS -> MainArea.HOME
+                                    MainArea.SETTINGS, MainArea.MANUAL -> MainArea.HOME
                                     else -> MainArea.SETTINGS
                                 }
                             }) {
-                                Text(if (selectedArea == MainArea.SETTINGS) "Done" else "Settings")
+                                Text(if (selectedArea == MainArea.SETTINGS || selectedArea == MainArea.MANUAL) "Done" else "⚙")
                             }
                         },
                     )
                 },
                 bottomBar = {
-                    NavigationBar {
-                        MainArea.entries.filterNot { it == MainArea.SETTINGS || it == MainArea.MANUAL }.forEach { area ->
-                            NavigationBarItem(
-                                selected = selectedArea == area,
-                                onClick = {
-                                    if (area == MainArea.REFERENCE) referenceRootVersion++
-                                    selectedArea = area
-                                },
-                                icon = { Text(navGlyph(area)) },
-                                label = { Text(area.shortLabel) },
-                            )
-                        }
-                    }
+                    HubNavigationBar(
+                        selectedArea = selectedArea,
+                        onSelect = { area ->
+                            if (area == MainArea.REFERENCE) referenceRootVersion++
+                            if (area == MainArea.RECORDS) recordsSection = RecordsSection.HISTORY
+                            selectedArea = area
+                        },
+                        onLog = { showGlobalLog = true },
+                    )
                 },
             ) { padding ->
                 when (selectedArea) {
@@ -192,7 +204,7 @@ fun HubHelperApp(
                         bookedPtoDays,
                         holidays = holidays,
                         workNotes = workNotes,
-                        onLogSomething = { showGlobalLog = true },
+                        onViewAttendanceDetails = { recordsSection = RecordsSection.DETAILS; selectedArea = MainArea.RECORDS },
                         onViewRecordSection = { section -> recordsSection = section; selectedArea = MainArea.RECORDS },
                     )
                     MainArea.RECORDS -> AttendanceLedgerScreen(
@@ -229,6 +241,7 @@ fun HubHelperApp(
                         holidays = holidays,
                         onAddHoliday = { date, name -> coroutineScope.launch { holidayRepository.add(date, name) } },
                         onDeleteHoliday = { holiday -> coroutineScope.launch { holidayRepository.delete(holiday) } },
+                        onViewRules = { selectedArea = MainArea.REFERENCE; referenceRootVersion++ },
                         initialSection = recordsSection,
                     )
                     MainArea.REFERENCE -> key(referenceRootVersion) { ContractLibraryScreen(padding, holidays) }
@@ -262,8 +275,10 @@ fun HubHelperApp(
                         onReminderChanged,
                         appLockEnabled,
                         onAppLockChanged,
-                        darkMode,
-                        onDarkModeChanged,
+                        selectedTheme,
+                        onThemeChanged,
+                        themeMode,
+                        onThemeModeChanged,
                         onExport = { destination ->
                             coroutineScope.launch {
                                 BackupExporter.export(
@@ -370,12 +385,113 @@ fun HubHelperApp(
     }
 }
 
-private fun navGlyph(area: MainArea): String = when (area) {
-    MainArea.HOME -> "⌂"
-    MainArea.RECORDS -> "≡"
-    MainArea.REFERENCE -> "R"
-    MainArea.DOCUMENTS -> "□"
-    else -> "•"
+@Composable
+private fun HubNavigationBar(
+    selectedArea: MainArea,
+    onSelect: (MainArea) -> Unit,
+    onLog: () -> Unit,
+) {
+    val design = HubThemeDesign.tokens
+    val areas = listOf(MainArea.HOME, MainArea.RECORDS, MainArea.REFERENCE, MainArea.DOCUMENTS)
+    NavigationBar {
+        areas.take(2).forEach { area ->
+            HubNavigationItem(area, selectedArea == area) { onSelect(area) }
+        }
+        NavigationBarItem(
+            selected = false,
+            onClick = onLog,
+            icon = {
+                Surface(
+                    modifier = Modifier.size(46.dp).semantics { contentDescription = "Log an event" },
+                    shape = if (design.theme == HubTheme.INDUSTRIAL) androidx.compose.foundation.shape.CutCornerShape(10.dp) else androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                ) {
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text("+", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            },
+            label = { Text("LOG") },
+        )
+        areas.drop(2).forEach { area ->
+            HubNavigationItem(area, selectedArea == area) { onSelect(area) }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.HubNavigationItem(area: MainArea, selected: Boolean, onClick: () -> Unit) {
+    val largeFont = LocalDensity.current.fontScale >= 1.3f
+    NavigationBarItem(
+        selected = selected,
+        onClick = onClick,
+        icon = {
+            HubNavIcon(
+                area = area,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics { contentDescription = area.label },
+            )
+        },
+        label = {
+            Text(
+                when {
+                    !largeFont -> area.shortLabel
+                    area == MainArea.REFERENCE -> "Ref"
+                    area == MainArea.DOCUMENTS -> "Docs"
+                    else -> area.shortLabel
+                },
+            )
+        },
+    )
+}
+
+@Composable
+private fun HubNavIcon(area: MainArea, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(24.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx())
+        when (area) {
+            MainArea.HOME -> {
+                val roof = Path().apply {
+                    moveTo(size.width * 0.12f, size.height * 0.48f)
+                    lineTo(size.width * 0.5f, size.height * 0.16f)
+                    lineTo(size.width * 0.88f, size.height * 0.48f)
+                }
+                drawPath(roof, color, style = stroke)
+                drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.22f, size.height * 0.44f), size = androidx.compose.ui.geometry.Size(size.width * 0.56f, size.height * 0.42f), style = stroke)
+            }
+            MainArea.RECORDS -> {
+                drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.2f, size.height * 0.14f), size = androidx.compose.ui.geometry.Size(size.width * 0.6f, size.height * 0.72f), style = stroke)
+                listOf(0.36f, 0.52f, 0.68f).forEach { y -> drawLine(color, androidx.compose.ui.geometry.Offset(size.width * 0.32f, size.height * y), androidx.compose.ui.geometry.Offset(size.width * 0.68f, size.height * y), strokeWidth = 1.8.dp.toPx()) }
+            }
+            MainArea.REFERENCE -> {
+                val book = Path().apply {
+                    moveTo(size.width * 0.08f, size.height * 0.22f)
+                    quadraticTo(size.width * 0.3f, size.height * 0.12f, size.width * 0.5f, size.height * 0.3f)
+                    quadraticTo(size.width * 0.7f, size.height * 0.12f, size.width * 0.92f, size.height * 0.22f)
+                    lineTo(size.width * 0.92f, size.height * 0.82f)
+                    quadraticTo(size.width * 0.7f, size.height * 0.72f, size.width * 0.5f, size.height * 0.88f)
+                    quadraticTo(size.width * 0.3f, size.height * 0.72f, size.width * 0.08f, size.height * 0.82f)
+                    close()
+                }
+                drawPath(book, color, style = stroke)
+                drawLine(color, androidx.compose.ui.geometry.Offset(size.width * 0.5f, size.height * 0.3f), androidx.compose.ui.geometry.Offset(size.width * 0.5f, size.height * 0.88f), strokeWidth = 1.8.dp.toPx())
+            }
+            MainArea.DOCUMENTS -> {
+                val folder = Path().apply {
+                    moveTo(size.width * 0.08f, size.height * 0.28f)
+                    lineTo(size.width * 0.4f, size.height * 0.28f)
+                    lineTo(size.width * 0.5f, size.height * 0.4f)
+                    lineTo(size.width * 0.92f, size.height * 0.4f)
+                    lineTo(size.width * 0.84f, size.height * 0.82f)
+                    lineTo(size.width * 0.08f, size.height * 0.82f)
+                    close()
+                }
+                drawPath(folder, color, style = stroke)
+            }
+            else -> drawCircle(color, radius = 3.dp.toPx())
+        }
+    }
 }
 
 private fun attendanceContributionHalfPoints(
@@ -409,9 +525,11 @@ private fun HomeScreen(
     bookedPtoDays: List<app.hubhelper.domain.BookedPtoDay>,
     holidays: List<app.hubhelper.domain.PlantHoliday>,
     workNotes: List<app.hubhelper.domain.WorkNote>,
-    onLogSomething: () -> Unit,
+    onViewAttendanceDetails: () -> Unit,
     onViewRecordSection: (RecordsSection) -> Unit,
 ) {
+    val design = HubThemeDesign.tokens
+    val largeFont = LocalDensity.current.fontScale >= 1.3f
     val datedSummary = remember(events, appDate) { AttendanceCalculator().summarize(events, appDate) }
     val nextCreditDate = remember(events, appDate) { AttendanceCalculator().nextAttendanceCreditDate(events, appDate) }
     val opening = setupData.attendanceOpeningRemainder.toBigDecimalOrNull() ?: BigDecimal.ZERO
@@ -435,9 +553,9 @@ private fun HomeScreen(
     val nextHoliday = holidays.firstOrNull { !it.date.isBefore(appDate) }
     val total = opening.add(dated)
     val risk = when (app.hubhelper.domain.attendanceColorBand(total)) {
-        app.hubhelper.domain.AttendanceColorBand.RED -> Triple("HIGH RISK", "Attendance points above five", HubColors.Danger)
-        app.hubhelper.domain.AttendanceColorBand.ORANGE -> Triple("WATCH", "Review upcoming changes", HubColors.Amber)
-        app.hubhelper.domain.AttendanceColorBand.GREEN -> Triple("LOW RISK", "Good standing", HubColors.Green)
+        app.hubhelper.domain.AttendanceColorBand.RED -> Triple("HIGH RISK", "Attendance points above five", MaterialTheme.colorScheme.error)
+        app.hubhelper.domain.AttendanceColorBand.ORANGE -> Triple("WATCH", "Review upcoming changes", design.attention)
+        app.hubhelper.domain.AttendanceColorBand.GREEN -> Triple("LOW RISK", "Good standing", design.good)
     }
     val expiringAmount = datedSummary.nextExpirationDate?.let { date ->
         events.filter {
@@ -449,12 +567,12 @@ private fun HomeScreen(
     Column(
         modifier = Modifier
             .padding(padding)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = design.screenPadding, vertical = design.contentSpacing)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(design.contentSpacing),
     ) {
         if (isDateOverridden) {
-            IndustrialPanel(modifier = Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
+            HubPanel(modifier = Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
                 Text(
                     "DEBUG DATE ACTIVE: $appDate",
                     color = MaterialTheme.colorScheme.error,
@@ -462,10 +580,10 @@ private fun HomeScreen(
                 )
             }
         }
-        IndustrialPanel(Modifier.fillMaxWidth(), accent = risk.third) {
+        HubPanel(Modifier.fillMaxWidth(), accent = risk.third, decorative = true) {
             SectionLabel("Attendance", color = risk.third)
             Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom) {
-                Text(currentTotal, style = MaterialTheme.typography.headlineLarge, color = risk.third)
+                Text(currentTotal, style = design.metricLarge, color = risk.third)
                 Text("  POINTS", style = MaterialTheme.typography.titleMedium, color = risk.third, modifier = Modifier.padding(bottom = 7.dp))
             }
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -475,55 +593,84 @@ private fun HomeScreen(
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
             Spacer(Modifier.height(13.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Column(Modifier.weight(1f)) {
-                    SectionLabel("Next change")
-                    val expirationDate = datedSummary.nextExpirationDate
-                    if (expirationDate != null) {
-                        MetricValue(expirationDate.monthDayYear(), "−${app.hubhelper.domain.HalfPoints(expiringAmount).asDisplayValue()}")
-                        Text("Point expires • 12-month rule", style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        Text("UNKNOWN", style = MaterialTheme.typography.titleMedium)
-                        Text("Dated point details needed", style = MaterialTheme.typography.bodySmall)
-                    }
+            val nextChange: @Composable () -> Unit = {
+                SectionLabel("Next change")
+                val expirationDate = datedSummary.nextExpirationDate
+                if (expirationDate != null) {
+                    MetricValue(expirationDate.monthDayYear(), "−${app.hubhelper.domain.HalfPoints(expiringAmount).asDisplayValue()}")
+                    Text("Point expires • 12-month rule", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("UNKNOWN", style = MaterialTheme.typography.titleMedium)
+                    Text("Dated point details needed", style = MaterialTheme.typography.bodySmall)
                 }
-                Column(Modifier.weight(1f)) {
-                    SectionLabel("Estimated 90-day credit")
-                    when {
-                        total <= BigDecimal(-1) -> Text("MAXIMUM −1", style = MaterialTheme.typography.titleMedium, color = HubColors.Green)
-                        nextCreditDate != null -> MetricValue(nextCreditDate.monthDayYear(), color = HubColors.Green)
-                        else -> Text("UNKNOWN", style = MaterialTheme.typography.titleMedium)
-                    }
-                    ProvenanceBadge("Estimated", Modifier.padding(top = 5.dp))
+            }
+            val estimatedCredit: @Composable () -> Unit = {
+                SectionLabel("Estimated 90-day credit")
+                when {
+                    total <= BigDecimal(-1) -> Text("MAXIMUM −1", style = MaterialTheme.typography.titleMedium, color = design.good)
+                    nextCreditDate != null -> MetricValue(nextCreditDate.monthDayYear(), color = design.good)
+                    else -> Text("UNKNOWN", style = MaterialTheme.typography.titleMedium)
                 }
+                ProvenanceBadge("Estimated", Modifier.padding(top = 5.dp))
+            }
+            if (design.theme != HubTheme.CLEAR_EASY && !largeFont) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Column(Modifier.weight(1f)) { nextChange() }
+                    Column(Modifier.weight(1f)) { estimatedCredit() }
+                }
+            } else {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.fillMaxWidth()) { nextChange() }
+                    Column(Modifier.fillMaxWidth()) { estimatedCredit() }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = onViewAttendanceDetails, modifier = Modifier.fillMaxWidth()) {
+                Text("VIEW DETAILS  ›")
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            val ptoWarningAt = if (setupData.shiftPreset == "SECOND") 10 else 8
-            val ptoColor = if (TimeOffCalculator.isAtOrBelowOnePtoDay(ptoBalance, ptoWarningAt)) HubColors.Amber else HubColors.Blue
-            val floatingRemaining = app.hubhelper.domain.remainingFloatingHolidays(timeAdjustments, bookedPtoDays, appDate)
+        val ptoWarningAt = if (setupData.shiftPreset == "SECOND") 10 else 8
+        val ptoColor = if (TimeOffCalculator.isAtOrBelowOnePtoDay(ptoBalance, ptoWarningAt)) design.attention else design.pto
+        val floatingRemaining = app.hubhelper.domain.remainingFloatingHolidays(timeAdjustments, bookedPtoDays, appDate)
+        if (!largeFont) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
             BalancePanel(
-                "PTO", ptoBalance, "HRS", ptoColor, Modifier.weight(1f),
-                { onViewRecordSection(RecordsSection.PTO) }, "$floatingRemaining floating",
+                "PTO hours", ptoBalance, "HRS", ptoColor, Modifier.weight(1f),
+                { onViewRecordSection(RecordsSection.PTO) },
+                supporting = "As of ${appDate.monthDayYear()}",
+                footer = "$floatingRemaining floating • opening ${setupData.ptoBalanceHours.ifBlank { "0" }} hrs",
             )
-            CallInPanel(callInsRemaining, Modifier.weight(1f)) { onViewRecordSection(RecordsSection.CALL_INS) }
-            val sickDays = sickDaysFromHours(sickBalance)
             BalancePanel(
-                "Sick", sickDays, dayLabel(sickDays).uppercase(), HubColors.Teal, Modifier.weight(1f),
+                "Sick hours", sickBalance, "HRS", design.sick, Modifier.weight(1f),
                 onClick = { onViewRecordSection(RecordsSection.SICK) },
+                supporting = "As of ${appDate.monthDayYear()}",
+                footer = "opening ${setupData.sickBalanceHours.ifBlank { "0" }} hrs",
+            )
+        } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
+            BalancePanel(
+                "PTO hours", ptoBalance, "HRS", ptoColor, Modifier.fillMaxWidth(),
+                { onViewRecordSection(RecordsSection.PTO) },
+                supporting = "As of ${appDate.monthDayYear()}",
+                footer = "$floatingRemaining floating • opening ${setupData.ptoBalanceHours.ifBlank { "0" }} hrs",
+            )
+            BalancePanel(
+                "Sick hours", sickBalance, "HRS", design.sick, Modifier.fillMaxWidth(),
+                onClick = { onViewRecordSection(RecordsSection.SICK) },
+                supporting = "As of ${appDate.monthDayYear()}",
+                footer = "opening ${setupData.sickBalanceHours.ifBlank { "0" }} hrs",
             )
         }
+        CallInPanel(callInsRemaining, Modifier.fillMaxWidth()) { onViewRecordSection(RecordsSection.CALL_INS) }
 
-        IndustrialPanel(Modifier.fillMaxWidth()) {
+        HubPanel(Modifier.fillMaxWidth()) {
             val nextBooked = app.hubhelper.domain.nextBookedPto(bookedPtoDays, appDate)
-            SectionLabel("Next booked vacation", color = HubColors.Blue)
+            SectionLabel("Next booked vacation", color = design.pto)
             if (nextBooked == null) {
                 Text("No upcoming PTO booked", style = MaterialTheme.typography.titleMedium)
                 Text("Scan an exception form or log a booked PTO date.", style = MaterialTheme.typography.bodySmall)
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(nextBooked.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = HubColors.Blue)
+                    Text(nextBooked.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.pto)
                     ProvenanceBadge(if (nextBooked.sourceDocumentId == null) "User" else "Source")
                 }
                 Text(when (nextBooked.type) {
@@ -534,24 +681,24 @@ private fun HomeScreen(
             }
         }
 
-        IndustrialPanel(
+        HubPanel(
             Modifier
                 .fillMaxWidth()
                 .clickable { onViewRecordSection(RecordsSection.HOLIDAYS) },
         ) {
-            SectionLabel("Next holiday", color = Color(0xFFD9BF66))
+            SectionLabel("Next plant holiday", color = design.attention)
             if (nextHoliday == null) {
                 Text("No reviewed holiday loaded", style = MaterialTheme.typography.titleMedium)
                 Text("Add the annual plant calendar in Documents.", style = MaterialTheme.typography.bodySmall)
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(nextHoliday.name.uppercase(), style = MaterialTheme.typography.titleLarge)
-                    Text(nextHoliday.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = Color(0xFFD9BF66))
+                    Text(nextHoliday.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.attention)
                 }
             }
         }
 
-        IndustrialPanel(
+        HubPanel(
             Modifier
                 .fillMaxWidth()
                 .clickable { onViewRecordSection(RecordsSection.HISTORY) },
@@ -574,8 +721,8 @@ private fun HomeScreen(
             }
             callInRecent.forEach { event -> ActivityRow(event.occurredOn, "call-in day", "−${event.ptoMinutes / 60} h PTO", "excused") }
             noteRecent.forEach { note -> ActivityRow(note.date, "work note", "", "user") }
+            Text("VIEW ALL ACTIVITY  ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
-        Button(onClick = onLogSomething, modifier = Modifier.fillMaxWidth()) { Text("+  LOG SOMETHING") }
         Text("Unofficial employee reference • Original records remain authoritative", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
@@ -587,7 +734,7 @@ private fun CallInPanel(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    IndustrialPanel(modifier.clickable(onClick = onClick), accent = MaterialTheme.colorScheme.primary) {
+    HubPanel(modifier.clickable(onClick = onClick), accent = MaterialTheme.colorScheme.primary) {
         SectionLabel("Call-ins", color = MaterialTheme.colorScheme.primary)
         MetricValue(remaining.toString(), "LEFT", MaterialTheme.colorScheme.primary)
     }
@@ -601,23 +748,30 @@ private fun BalancePanel(
     color: Color,
     modifier: Modifier,
     onClick: () -> Unit,
+    supporting: String? = null,
     footer: String? = null,
 ) {
-    IndustrialPanel(modifier.clickable(onClick = onClick), accent = color) {
+    HubPanel(modifier.clickable(onClick = onClick), accent = color) {
         SectionLabel(title, color = color)
         MetricValue(balance, unit, color)
-        footer?.let { Text(it, style = MaterialTheme.typography.labelLarge, color = color) }
+        supporting?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        footer?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = color) }
     }
 }
 
 @Composable
 private fun ActivityRow(date: LocalDate, label: String, change: String, status: String) {
+    val largeFont = LocalDensity.current.fontScale >= 1.3f
     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (!largeFont) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(date.monthDayYear(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1.1f))
         Text(label.replaceFirstChar(Char::uppercase), modifier = Modifier.weight(1.7f))
         Text(change, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(.7f))
-        Text(status.uppercase(), style = MaterialTheme.typography.labelMedium, color = if (status == "confirmed") HubColors.Green else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(status.uppercase(), style = MaterialTheme.typography.labelMedium, color = if (status == "confirmed") HubThemeDesign.tokens.good else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+    } else Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(date.monthDayYear(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(label.replaceFirstChar(Char::uppercase))
+        Text(listOf(change, status.replaceFirstChar(Char::uppercase)).filter(String::isNotBlank).joinToString(" • "), style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -636,13 +790,13 @@ private fun NewYearResetDialog(
         title = { Text("$year RESET COMPLETE") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatusBadge("New year", HubColors.Green)
+                StatusBadge("New year", HubThemeDesign.tokens.good)
                 Text("Your annual counters now use the new calendar year.")
-                IndustrialPanel(Modifier.fillMaxWidth(), accent = HubColors.Blue) {
+                HubPanel(Modifier.fillMaxWidth(), accent = HubThemeDesign.tokens.pto) {
                     SectionLabel("PTO allowance")
                     Text(ptoHours?.let { "$it hours for $year" } ?: "Add your hire date to calculate the full allowance")
                 }
-                IndustrialPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
+                HubPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
                     SectionLabel("Call-ins")
                     Text("5 available for $year")
                 }
@@ -665,8 +819,10 @@ private fun SettingsScreen(
     onReminderChanged: (ReminderPreference) -> Unit,
     appLockEnabled: Boolean,
     onAppLockChanged: (Boolean) -> Unit,
-    darkMode: Boolean,
-    onDarkModeChanged: (Boolean) -> Unit,
+    selectedTheme: HubTheme,
+    onThemeChanged: (HubTheme) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChanged: (ThemeMode) -> Unit,
     onExport: (Uri) -> Unit,
     onImportBackup: (Uri) -> Unit,
     onResetApp: () -> Unit,
@@ -693,17 +849,31 @@ private fun SettingsScreen(
     Column(
         modifier = Modifier
             .padding(padding)
-            .padding(20.dp)
+            .padding(HubThemeDesign.tokens.screenPadding)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(HubThemeDesign.tokens.contentSpacing),
     ) {
-        Text("Appearance and privacy", style = MaterialTheme.typography.titleMedium)
-        Text("Theme: Industrial", style = MaterialTheme.typography.labelLarge)
-        Text("Cloud backup and network access are disabled.")
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Switch(checked = darkMode, onCheckedChange = onDarkModeChanged)
-            Text(if (darkMode) "Dark mode enabled" else "Dark mode disabled")
+        Text("Appearance", style = MaterialTheme.typography.titleMedium)
+        SectionLabel("Theme")
+        HubTheme.entries.forEach { theme ->
+            FilterChip(
+                selected = selectedTheme == theme,
+                onClick = { onThemeChanged(theme) },
+                label = { Text(theme.displayName) },
+            )
         }
+        SectionLabel("Mode")
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ThemeMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = themeMode == mode,
+                    onClick = { onThemeModeChanged(mode) },
+                    label = { Text(mode.displayName) },
+                )
+            }
+        }
+        Text("Privacy", style = MaterialTheme.typography.titleMedium)
+        Text("Cloud backup and network access are disabled.")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Switch(checked = appLockEnabled, onCheckedChange = onAppLockChanged)
             Text(if (appLockEnabled) "App lock enabled" else "App lock disabled")
@@ -761,7 +931,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.7.9 • build 22", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.8.0 • build 23", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -857,7 +1027,7 @@ private fun PastPointsTools(
                 }
                 if (events.isEmpty()) Text("No dated points saved.")
                 events.sortedByDescending { it.occurredOn }.forEach { event ->
-                    IndustrialPanel(Modifier.fillMaxWidth()) {
+                    HubPanel(Modifier.fillMaxWidth()) {
                         Text("${event.occurredOn.monthDayYear()} • ${event.points.asDisplayValue()} points", fontWeight = FontWeight.SemiBold)
                         Text(event.type.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase))
                         Text("Falloff: ${if (event.type == app.hubhelper.domain.AttendanceEventType.ATTENDANCE_CREDIT) "No annual falloff" else event.occurredOn.plusMonths(12).monthDayYear()}", style = MaterialTheme.typography.bodySmall)
@@ -1010,13 +1180,13 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "Privacy",
-            "Data stays in app-private storage. Cloud backup and network access are disabled. Export is explicit and user initiated. Settings also includes a persistent dark-mode switch.",
+            "Data stays in app-private storage. Cloud backup and network access are disabled. Export is explicit and user initiated. Theme changes are stored only on this device.",
         )
         ManualSection(
             "Appearance",
-            "Industrial is the current theme. Its headings, labels, and numeric readouts use an offline dot-matrix display face, while longer text uses a conventional typeface for readability. Dark and light modes remain available.",
+            "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.7.9", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.8.0", style = MaterialTheme.typography.bodySmall)
     }
 }
 

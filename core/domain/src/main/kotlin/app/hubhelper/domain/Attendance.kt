@@ -50,6 +50,13 @@ data class AttendanceSummary(
     val nextExpirationDate: LocalDate?,
 )
 
+data class AttendanceBreakdown(
+    val confirmedCharges: HalfPoints,
+    val confirmedCredits: HalfPoints,
+    val includedEvents: List<AttendanceEvent>,
+    val excludedEvents: List<AttendanceEvent>,
+)
+
 /** Implements only reviewed, unambiguous policy rules. */
 class AttendanceCalculator(
     private val expirationMonths: Long = 12,
@@ -75,12 +82,22 @@ class AttendanceCalculator(
         return lastConfirmedPoint.occurredOn.plusDays(90L * (creditsSinceLastPoint + 1))
     }
 
-    fun summarize(events: List<AttendanceEvent>, asOf: LocalDate): AttendanceSummary {
-        val activeConfirmed = events.filter { event ->
+    fun breakdown(events: List<AttendanceEvent>, asOf: LocalDate): AttendanceBreakdown {
+        val included = events.filter { event ->
             event.status == AttendanceEventStatus.CONFIRMED &&
                 !event.occurredOn.isAfter(asOf) &&
                 (event.type == AttendanceEventType.ATTENDANCE_CREDIT || asOf.isBefore(expiresOn(event)))
         }
+        return AttendanceBreakdown(
+            confirmedCharges = HalfPoints(included.filterNot { it.type == AttendanceEventType.ATTENDANCE_CREDIT }.sumOf { it.points.value }),
+            confirmedCredits = HalfPoints(included.filter { it.type == AttendanceEventType.ATTENDANCE_CREDIT }.sumOf { it.points.value }),
+            includedEvents = included,
+            excludedEvents = events.filterNot(included::contains),
+        )
+    }
+
+    fun summarize(events: List<AttendanceEvent>, asOf: LocalDate): AttendanceSummary {
+        val activeConfirmed = breakdown(events, asOf).includedEvents
 
         val pendingCount = events.count {
             it.status == AttendanceEventStatus.PENDING && !it.occurredOn.isAfter(asOf)

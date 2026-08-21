@@ -6,10 +6,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
+import androidx.compose.foundation.isSystemInDarkTheme
 import app.hubhelper.data.AttendanceRepository
 import app.hubhelper.data.TimeBalanceRepository
 import app.hubhelper.data.DocumentRepository
@@ -74,17 +77,26 @@ class MainActivity : FragmentActivity() {
         var setupData by mutableStateOf(setupPreferences.load())
         var showSetup by mutableStateOf(!setupPreferences.isComplete)
         var reminderPreference by mutableStateOf(reminderPreferences.load(setupData.shiftPreset))
-        var darkMode by mutableStateOf(themePreferences.darkMode)
+        var selectedTheme by mutableStateOf(themePreferences.theme)
+        var themeMode by mutableStateOf(themePreferences.mode)
         val setupYear = runCatching { LocalDate.parse(setupData.balancesAsOfDate).year }.getOrDefault(LocalDate.now().year)
         var lastAcknowledgedYear by mutableStateOf(newYearPreferences.lastAcknowledgedYear(setupYear))
         if (reminderPreference.enabled) WeeklyReminderScheduler.apply(this, reminderPreference)
 
         setContent {
             val appScope = rememberCoroutineScope()
+            val darkMode = themeMode.resolveDarkMode(isSystemInDarkTheme())
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !darkMode
+                    isAppearanceLightNavigationBars = !darkMode
+                }
+            }
             if (!unlocked) {
-                AppLockedScreen(darkMode, ::requestUnlock)
+                AppLockedScreen(selectedTheme, darkMode, ::requestUnlock)
             } else if (showSetup) {
                 InitialSetupScreen(
+                    theme = selectedTheme,
                     darkMode = darkMode,
                     initialData = setupData,
                     canCancel = setupPreferences.isComplete,
@@ -164,11 +176,17 @@ class MainActivity : FragmentActivity() {
                         appLockPreferences.enabled = enabled
                         if (!enabled) unlocked = true
                     },
-                    darkMode = darkMode,
-                    onDarkModeChanged = { enabled ->
-                        themePreferences.darkMode = enabled
-                        darkMode = enabled
+                    selectedTheme = selectedTheme,
+                    onThemeChanged = { theme ->
+                        themePreferences.theme = theme
+                        selectedTheme = theme
                     },
+                    themeMode = themeMode,
+                    onThemeModeChanged = { mode ->
+                        themePreferences.mode = mode
+                        themeMode = mode
+                    },
+                    darkMode = darkMode,
                     onImportBackup = { source ->
                         appScope.launch {
                             runCatching {

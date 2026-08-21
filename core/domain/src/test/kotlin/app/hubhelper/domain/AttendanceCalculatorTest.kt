@@ -64,6 +64,26 @@ class AttendanceCalculatorTest {
     }
 
     @Test
+    fun `breakdown separates active charges credits and excluded entries`() {
+        val charged = event("2026-01-01", 3, AttendanceEventStatus.CONFIRMED)
+        val pending = event("2026-02-01", 2, AttendanceEventStatus.PENDING)
+        val credit = AttendanceEvent(
+            id = "credit",
+            occurredOn = date("2026-03-01"),
+            type = AttendanceEventType.ATTENDANCE_CREDIT,
+            points = HalfPoints(2),
+            status = AttendanceEventStatus.CONFIRMED,
+        )
+
+        val breakdown = calculator.breakdown(listOf(charged, pending, credit), date("2026-04-01"))
+
+        assertEquals(3, breakdown.confirmedCharges.value)
+        assertEquals(2, breakdown.confirmedCredits.value)
+        assertEquals(listOf(charged, credit), breakdown.includedEvents)
+        assertEquals(listOf(pending), breakdown.excludedEvents)
+    }
+
+    @Test
     fun `next attendance credit is 90 days after the latest confirmed point`() {
         val older = event("2026-01-01", 2, AttendanceEventStatus.CONFIRMED)
         val latest = event("2026-02-15", 1, AttendanceEventStatus.CONFIRMED)

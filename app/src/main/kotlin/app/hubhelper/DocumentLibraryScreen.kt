@@ -30,7 +30,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -125,7 +124,7 @@ fun DocumentLibraryScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("SEARCH SAVED DOCUMENTS") }
             if (showSearchResults) {
-                IndustrialPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
+                HubPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
                     SectionLabel("Search results")
                     Text("${searchMatches.size} result${if (searchMatches.size == 1) "" else "s"} for “$query”")
                     if (searchMatches.isEmpty()) Text("Nothing matched saved titles or detected text.")
@@ -169,7 +168,7 @@ fun DocumentLibraryScreen(
                         }
                         if (document.category == DocumentCategory.HOLIDAY_CALENDAR) {
                             val parsed = remember(recognizedText, appDate.year) { HolidayCalendarParser().parse(recognizedText, appDate.year) }
-                            SectionLabel("Detected holidays", color = Color(0xFFD9BF66))
+                            SectionLabel("Detected holidays", color = HubThemeDesign.tokens.attention)
                             Text("Review each result before adding it to the calendar.")
                             val unsaved = parsed.holidays.filterNot { candidate ->
                                 holidays.any { it.date == candidate.date && it.name.equals(candidate.name, ignoreCase = true) }
@@ -198,7 +197,7 @@ fun DocumentLibraryScreen(
                         }
                         if (document.category == DocumentCategory.EXCEPTION_FORM) {
                             val parsed = remember(recognizedText, appDate) { ExceptionFormParser().parse(recognizedText, appDate) }
-                            SectionLabel("Detected booked dates", color = HubColors.Blue)
+                            SectionLabel("Detected booked dates", color = HubThemeDesign.tokens.pto)
                             if (parsed.bookedDates.isEmpty()) Text("No dates recognized. Review the detected text or add the date manually from Log.")
                             parsed.bookedDates.forEach { date ->
                                 val saved = bookedPtoDays.any { it.date == date && it.sourceDocumentId == document.id }

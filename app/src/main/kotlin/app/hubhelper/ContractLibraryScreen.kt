@@ -97,7 +97,7 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
             modifier = Modifier.fillMaxWidth(),
         ) { Text("SEARCH REFERENCE") }
         if (showSearchResults) {
-            IndustrialPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
+            HubPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
                 SectionLabel("Search results")
                 Text("${matches.size} result${if (matches.size == 1) "" else "s"} for “$query”")
                 if (matches.isEmpty()) Text("No matching passages were found.")
