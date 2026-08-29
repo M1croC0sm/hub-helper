@@ -16,7 +16,7 @@ are reliable.
 ## Project status
 
 The Android/Compose app now includes persistent attendance and time-balance
-ledgers, schedule presets, holidays, notes, a private OCR document library,
+data, an interactive year/month calendar, schedule presets, holidays, notes, a private OCR document library,
 offline contract/policy search, reminders, backup export, app lock, and tested
 policy calculations. Its shared Compose UI includes Industrial Instrument,
 Clear & Easy, and Soft & Friendly themes with system, light, and dark modes.

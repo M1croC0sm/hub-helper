@@ -34,6 +34,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,13 +77,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
 import java.time.DayOfWeek
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import android.net.Uri
 
 private enum class MainArea(val label: String, val shortLabel: String) {
     HOME("Home", "Home"),
-    RECORDS("Records", "Records"),
+    CALENDAR("Calendar", "Calendar"),
+    ATTENDANCE_DETAILS("Attendance details", "Details"),
     REFERENCE("Reference", "Reference"),
     DOCUMENTS("Documents", "Documents"),
     SETTINGS("Settings", "Settings"),
@@ -122,9 +125,11 @@ fun HubHelperApp(
     onYearAcknowledged: (Int) -> Unit,
 ) {
     var selectedArea by remember { mutableStateOf(MainArea.HOME) }
-    var recordsSection by remember { mutableStateOf<RecordsSection?>(null) }
-    var referenceRootVersion by remember { mutableStateOf(0) }
+    var calendarRequest by remember { mutableStateOf(CalendarRequest()) }
+    var calendarRequestVersion by remember { mutableIntStateOf(0) }
+    var referenceRootVersion by remember { mutableIntStateOf(0) }
     var showGlobalLog by remember { mutableStateOf(false) }
+    var logDate by remember { mutableStateOf<LocalDate?>(null) }
     val appContext = LocalContext.current.applicationContext
     val events by attendanceRepository.events.collectAsState(initial = emptyList())
     val timeAdjustments by timeBalanceRepository.adjustments.collectAsState(initial = emptyList())
@@ -157,10 +162,8 @@ fun HubHelperApp(
                 topBar = {
                     TopAppBar(
                         title = {
-                            val title = when {
-                                selectedArea == MainArea.HOME -> "HUBB HELPER"
-                                selectedArea == MainArea.RECORDS && recordsSection == RecordsSection.DETAILS -> "Attendance details"
-                                selectedArea == MainArea.RECORDS && recordsSection == RecordsSection.HISTORY -> "Records (Attendance)"
+                            val title = when (selectedArea) {
+                                MainArea.HOME -> "HUBB HELPER"
                                 else -> selectedArea.label
                             }
                             Text(title, style = MaterialTheme.typography.titleLarge)
@@ -184,10 +187,13 @@ fun HubHelperApp(
                         selectedArea = selectedArea,
                         onSelect = { area ->
                             if (area == MainArea.REFERENCE) referenceRootVersion++
-                            if (area == MainArea.RECORDS) recordsSection = RecordsSection.HISTORY
+                            if (area == MainArea.CALENDAR) {
+                                calendarRequest = CalendarRequest()
+                                calendarRequestVersion++
+                            }
                             selectedArea = area
                         },
-                        onLog = { showGlobalLog = true },
+                        onLog = { logDate = null; showGlobalLog = true },
                     )
                 },
             ) { padding ->
@@ -204,31 +210,37 @@ fun HubHelperApp(
                         bookedPtoDays,
                         holidays = holidays,
                         workNotes = workNotes,
-                        onViewAttendanceDetails = { recordsSection = RecordsSection.DETAILS; selectedArea = MainArea.RECORDS },
-                        onViewRecordSection = { section -> recordsSection = section; selectedArea = MainArea.RECORDS },
+                        onViewAttendanceDetails = { selectedArea = MainArea.ATTENDANCE_DETAILS },
+                        onViewCalendar = { request ->
+                            calendarRequest = request
+                            calendarRequestVersion++
+                            selectedArea = MainArea.CALENDAR
+                        },
                     )
-                    MainArea.RECORDS -> AttendanceLedgerScreen(
+                    MainArea.CALENDAR -> key(calendarRequestVersion) { CalendarScreen(
                         padding = padding,
                         appDate = appDate,
                         openingBalance = setupData.attendanceOpeningRemainder,
                         events = events,
-                        onAdd = { date, type, points, status, note ->
-                            coroutineScope.launch { attendanceRepository.add(date, type, points, status, note) }
-                        },
-                        onDelete = { event -> coroutineScope.launch { attendanceRepository.delete(event) } },
-                        onUpdate = { event -> coroutineScope.launch { attendanceRepository.update(event) } },
                         timeAdjustments = timeAdjustments,
                         callIns = callIns,
-                        callInsRemaining = callInsRemainingFor(appDate.year),
                         bookedPtoDays = bookedPtoDays,
-                        ptoOpeningHours = setupData.ptoBalanceHours,
-                        sickOpeningHours = setupData.sickBalanceHours,
-                        balancesAsOfDate = setupData.balancesAsOfDate,
-                        hireDate = setupData.hireDate,
-                        shiftPreset = setupData.shiftPreset,
-                        birthdayMonth = setupData.birthdayMonth.toIntOrNull(),
-                        onAddTimeAdjustment = { date, kind, minutes, note ->
-                            coroutineScope.launch { timeBalanceRepository.add(date, kind, minutes, note) }
+                        holidays = holidays,
+                        request = calendarRequest,
+                        onLogDate = { date -> logDate = date; showGlobalLog = true },
+                        onUpdateAttendance = { updated ->
+                            val existing = events.firstOrNull { it.id == updated.id }
+                            if (existing != null) {
+                                val oldContribution = attendanceContributionHalfPoints(existing.occurredOn, existing.type, existing.points, existing.status, appDate)
+                                val newContribution = attendanceContributionHalfPoints(updated.occurredOn, updated.type, updated.points, updated.status, appDate)
+                                onSetupDataChanged(setupData.withOpeningPointAdjustment(oldContribution - newContribution))
+                                coroutineScope.launch { attendanceRepository.update(updated) }
+                            }
+                        },
+                        onDeleteAttendance = { event ->
+                            val contribution = attendanceContributionHalfPoints(event.occurredOn, event.type, event.points, event.status, appDate)
+                            onSetupDataChanged(setupData.withOpeningPointAdjustment(contribution))
+                            coroutineScope.launch { attendanceRepository.delete(event) }
                         },
                         onDeleteTimeAdjustment = { adjustment ->
                             coroutineScope.launch { timeBalanceRepository.delete(adjustment) }
@@ -238,11 +250,15 @@ fun HubHelperApp(
                             saveCallInsRemaining(event.occurredOn.year, callInsRemainingFor(event.occurredOn.year) + 1)
                         },
                         onDeleteBookedPto = { day -> coroutineScope.launch { bookedPtoRepository.delete(day) } },
-                        holidays = holidays,
-                        onAddHoliday = { date, name -> coroutineScope.launch { holidayRepository.add(date, name) } },
                         onDeleteHoliday = { holiday -> coroutineScope.launch { holidayRepository.delete(holiday) } },
+                    ) }
+                    MainArea.ATTENDANCE_DETAILS -> AttendanceDetailsScreen(
+                        padding = padding,
+                        appDate = appDate,
+                        openingBalance = setupData.attendanceOpeningRemainder,
+                        balancesAsOfDate = setupData.balancesAsOfDate,
+                        events = events,
                         onViewRules = { selectedArea = MainArea.REFERENCE; referenceRootVersion++ },
-                        initialSection = recordsSection,
                     )
                     MainArea.REFERENCE -> key(referenceRootVersion) { ContractLibraryScreen(padding, holidays) }
                     MainArea.DOCUMENTS -> DocumentLibraryScreen(
@@ -342,9 +358,9 @@ fun HubHelperApp(
             }
             if (showGlobalLog) {
                 GlobalLogDialog(
-                    appDate = appDate,
+                    appDate = logDate ?: appDate,
                     shiftPreset = setupData.shiftPreset,
-                    onDismiss = { showGlobalLog = false },
+                    onDismiss = { showGlobalLog = false; logDate = null },
                     onAttendance = { date, type, points, status, note ->
                         coroutineScope.launch { attendanceRepository.add(date, type, points, status, note) }
                     },
@@ -392,7 +408,7 @@ private fun HubNavigationBar(
     onLog: () -> Unit,
 ) {
     val design = HubThemeDesign.tokens
-    val areas = listOf(MainArea.HOME, MainArea.RECORDS, MainArea.REFERENCE, MainArea.DOCUMENTS)
+    val areas = listOf(MainArea.HOME, MainArea.CALENDAR, MainArea.REFERENCE, MainArea.DOCUMENTS)
     NavigationBar {
         areas.take(2).forEach { area ->
             HubNavigationItem(area, selectedArea == area) { onSelect(area) }
@@ -460,9 +476,14 @@ private fun HubNavIcon(area: MainArea, color: Color, modifier: Modifier = Modifi
                 drawPath(roof, color, style = stroke)
                 drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.22f, size.height * 0.44f), size = androidx.compose.ui.geometry.Size(size.width * 0.56f, size.height * 0.42f), style = stroke)
             }
-            MainArea.RECORDS -> {
-                drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.2f, size.height * 0.14f), size = androidx.compose.ui.geometry.Size(size.width * 0.6f, size.height * 0.72f), style = stroke)
-                listOf(0.36f, 0.52f, 0.68f).forEach { y -> drawLine(color, androidx.compose.ui.geometry.Offset(size.width * 0.32f, size.height * y), androidx.compose.ui.geometry.Offset(size.width * 0.68f, size.height * y), strokeWidth = 1.8.dp.toPx()) }
+            MainArea.CALENDAR, MainArea.ATTENDANCE_DETAILS -> {
+                drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.12f, size.height * 0.2f), size = androidx.compose.ui.geometry.Size(size.width * 0.76f, size.height * 0.68f), style = stroke)
+                drawLine(color, androidx.compose.ui.geometry.Offset(size.width * 0.12f, size.height * 0.38f), androidx.compose.ui.geometry.Offset(size.width * 0.88f, size.height * 0.38f), strokeWidth = 1.8.dp.toPx())
+                listOf(0.33f, 0.5f, 0.67f).forEach { x ->
+                    listOf(0.52f, 0.68f).forEach { y ->
+                        drawCircle(color, radius = 1.3.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width * x, size.height * y))
+                    }
+                }
             }
             MainArea.REFERENCE -> {
                 val book = Path().apply {
@@ -526,7 +547,7 @@ private fun HomeScreen(
     holidays: List<app.hubhelper.domain.PlantHoliday>,
     workNotes: List<app.hubhelper.domain.WorkNote>,
     onViewAttendanceDetails: () -> Unit,
-    onViewRecordSection: (RecordsSection) -> Unit,
+    onViewCalendar: (CalendarRequest) -> Unit,
 ) {
     val design = HubThemeDesign.tokens
     val largeFont = LocalDensity.current.fontScale >= 1.3f
@@ -636,31 +657,33 @@ private fun HomeScreen(
         if (!largeFont) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
             BalancePanel(
                 "PTO hours", ptoBalance, "HRS", ptoColor, Modifier.weight(1f),
-                { onViewRecordSection(RecordsSection.PTO) },
+                { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.PTO)) },
                 supporting = "As of ${appDate.monthDayYear()}",
                 footer = "$floatingRemaining floating • opening ${setupData.ptoBalanceHours.ifBlank { "0" }} hrs",
             )
             BalancePanel(
                 "Sick hours", sickBalance, "HRS", design.sick, Modifier.weight(1f),
-                onClick = { onViewRecordSection(RecordsSection.SICK) },
+                onClick = { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.SICK)) },
                 supporting = "As of ${appDate.monthDayYear()}",
                 footer = "opening ${setupData.sickBalanceHours.ifBlank { "0" }} hrs",
             )
         } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
             BalancePanel(
                 "PTO hours", ptoBalance, "HRS", ptoColor, Modifier.fillMaxWidth(),
-                { onViewRecordSection(RecordsSection.PTO) },
+                { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.PTO)) },
                 supporting = "As of ${appDate.monthDayYear()}",
                 footer = "$floatingRemaining floating • opening ${setupData.ptoBalanceHours.ifBlank { "0" }} hrs",
             )
             BalancePanel(
                 "Sick hours", sickBalance, "HRS", design.sick, Modifier.fillMaxWidth(),
-                onClick = { onViewRecordSection(RecordsSection.SICK) },
+                onClick = { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.SICK)) },
                 supporting = "As of ${appDate.monthDayYear()}",
                 footer = "opening ${setupData.sickBalanceHours.ifBlank { "0" }} hrs",
             )
         }
-        CallInPanel(callInsRemaining, Modifier.fillMaxWidth()) { onViewRecordSection(RecordsSection.CALL_INS) }
+        CallInPanel(callInsRemaining, Modifier.fillMaxWidth()) {
+            onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.CALL_IN))
+        }
 
         HubPanel(Modifier.fillMaxWidth()) {
             val nextBooked = app.hubhelper.domain.nextBookedPto(bookedPtoDays, appDate)
@@ -684,7 +707,11 @@ private fun HomeScreen(
         HubPanel(
             Modifier
                 .fillMaxWidth()
-                .clickable { onViewRecordSection(RecordsSection.HOLIDAYS) },
+                .clickable {
+                    onViewCalendar(
+                        CalendarRequest(nextHoliday?.date?.let(YearMonth::from) ?: YearMonth.from(appDate), CalendarFilter.HOLIDAY),
+                    )
+                },
         ) {
             SectionLabel("Next plant holiday", color = design.attention)
             if (nextHoliday == null) {
@@ -701,7 +728,7 @@ private fun HomeScreen(
         HubPanel(
             Modifier
                 .fillMaxWidth()
-                .clickable { onViewRecordSection(RecordsSection.HISTORY) },
+                .clickable { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.ALL)) },
         ) {
             SectionLabel("Recent activity")
             val attendanceRecent = events.sortedByDescending { it.occurredOn }.take(3)
@@ -721,7 +748,7 @@ private fun HomeScreen(
             }
             callInRecent.forEach { event -> ActivityRow(event.occurredOn, "call-in day", "−${event.ptoMinutes / 60} h PTO", "excused") }
             noteRecent.forEach { note -> ActivityRow(note.date, "work note", "", "user") }
-            Text("VIEW ALL ACTIVITY  ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text("OPEN CALENDAR  ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         Text("Unofficial employee reference • Original records remain authoritative", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -931,7 +958,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.8.0 • build 23", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.9.0 • build 24", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1152,7 +1179,7 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "Getting started",
-            "Choose dates from the calendar; dates are displayed as month/day/year. Enter your hire date, shift, current PTO and sick balances, call-ins remaining, and current attendance points. Current points are always entered manually. Setup remains editable under Settings. On Home, tap a balance panel, Next holiday, or Recent activity to open its matching Records section.",
+            "Enter your hire date, shift, current PTO and sick balances, call-ins remaining, and current attendance points. Current points are always entered manually. Setup remains editable under Settings. Home panels open the Calendar with the matching month and event type highlighted.",
         )
         ManualSection(
             "Attendance calculations",
@@ -1164,7 +1191,11 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "PTO, sick time, holidays, and notes",
-            "Opening balances come from setup. Under Records, use the full-day or half-day PTO button for your shift, or choose Other amount. Sick time is shown as days; one sick day is eight hours. You receive five call-ins each calendar year. Logging one deducts eight PTO hours on first shift or ten on second shift. A regular booked vacation deducts the shift-day amount when its date arrives and is not deducted twice if it was also recorded manually. The two personal floating holidays are tracked separately and are never listed as dated plant holidays. Reviewed plant holidays also appear in Reference.",
+            "Opening balances come from setup. Use LOG to record full-day, half-day, or custom PTO, sick time, call-ins, floating holidays, and booked vacation. Sick time is shown as days; one sick day is eight hours. You receive five call-ins each calendar year. Logging one deducts eight PTO hours on first shift or ten on second shift. A regular booked vacation deducts the shift-day amount when its date arrives and is not deducted twice if it was also recorded manually. The two personal floating holidays are tracked separately and are never listed as dated plant holidays. Reviewed plant holidays also appear in Reference.",
+        )
+        ManualSection(
+            "Calendar",
+            "Calendar opens with all twelve months. A stronger red month indicator means more confirmed attendance points were accrued in that month; the printed point value remains authoritative. Tap a month to see its days. The pinned legend identifies green point falloffs, confirmed and estimated attendance credits, accrued points, call-ins, sick time, PTO, and plant holidays. Estimated credits use an outlined marker. Tap a legend item to filter, tap a day for full details, or log something with that date already selected. Editable entries can be changed or removed from the day details. Manually entered points without dates cannot appear on the calendar.",
         )
         ManualSection(
             "Search",
@@ -1186,7 +1217,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.8.0", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.9.0", style = MaterialTheme.typography.bodySmall)
     }
 }
 
