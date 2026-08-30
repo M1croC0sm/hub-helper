@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -717,17 +718,27 @@ private fun HomeScreen(
                 CallInPanel(callInsRemaining, Modifier.weight(1f)) {
                     onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.CALL_IN))
                 }
-                HubPanel(Modifier.weight(1f).clickable { onViewCalendar(CalendarRequest(YearMonth.from(nextPayday))) }, accent = MaterialTheme.colorScheme.primary) {
-                    SectionLabel("Next payday", color = MaterialTheme.colorScheme.primary)
-                    MetricValue(nextPayday.monthDayYear(), "FRIDAY", MaterialTheme.colorScheme.primary)
+                val paydayDaysAway = ChronoUnit.DAYS.between(appDate, nextPayday).coerceAtLeast(0)
+                val paydayColor = lerp(MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.onSurface, (1f - paydayDaysAway.toFloat() / 14f).coerceIn(0f, 1f))
+                HubPanel(Modifier.weight(1f).clickable { onViewCalendar(CalendarRequest(YearMonth.from(nextPayday))) }, accent = paydayColor) {
+                    SectionLabel("Next payday", color = paydayColor)
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(nextPayday.format(DateTimeFormatter.ofPattern("MMM d, yy")), style = MaterialTheme.typography.titleMedium, color = paydayColor, fontWeight = FontWeight.SemiBold)
+                        Text("FRIDAY", style = MaterialTheme.typography.labelSmall, color = paydayColor)
+                    }
                 }
             }
         } else {
             CallInPanel(callInsRemaining, Modifier.fillMaxWidth()) { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.CALL_IN)) }
             nextPayday?.let { date ->
-                HubPanel(Modifier.fillMaxWidth().clickable { onViewCalendar(CalendarRequest(YearMonth.from(date))) }, accent = MaterialTheme.colorScheme.primary) {
-                    SectionLabel("Next payday", color = MaterialTheme.colorScheme.primary)
-                    MetricValue(date.monthDayYear(), "FRIDAY", MaterialTheme.colorScheme.primary)
+                val paydayDaysAway = ChronoUnit.DAYS.between(appDate, date).coerceAtLeast(0)
+                val paydayColor = lerp(MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.onSurface, (1f - paydayDaysAway.toFloat() / 14f).coerceIn(0f, 1f))
+                HubPanel(Modifier.fillMaxWidth().clickable { onViewCalendar(CalendarRequest(YearMonth.from(date))) }, accent = paydayColor) {
+                    SectionLabel("Next payday", color = paydayColor)
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(date.format(DateTimeFormatter.ofPattern("MMM d, yy")), style = MaterialTheme.typography.titleMedium, color = paydayColor, fontWeight = FontWeight.SemiBold)
+                        Text("FRIDAY", style = MaterialTheme.typography.labelSmall, color = paydayColor)
+                    }
                 }
             }
         }
@@ -1026,7 +1037,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.10.1 • build 35", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.10.2 • build 36", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(

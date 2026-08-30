@@ -2,6 +2,13 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.10.2 — 2026-08-30
+
+### Changed
+
+- Payday tile now matches the Call-ins tile height, uses a compact two-digit year, and keeps Friday in a small label.
+- Payday emphasis progresses from muted to bright in dark mode and from muted to dark in light mode as payday approaches.
+
 ## 0.10.1 — 2026-08-30
 
 ### Added
