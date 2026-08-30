@@ -315,7 +315,7 @@ fun HubHelperApp(
                         },
                         onImportBackup = onImportBackup,
                         onResetApp = onResetApp,
-                        onOpenManual = { selectedArea = MainArea.MANUAL },
+                        onOpenManual = { selectedArea = MainArea.REFERENCE; referenceRootVersion++ },
                         onAddBalanceCorrection = { kind, minutes, note ->
                             coroutineScope.launch { timeBalanceRepository.add(appDate, kind, minutes, note) }
                         },
@@ -1212,7 +1212,7 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "Documents and printouts",
-            "Tap Add document, choose its category, then take photos or choose files from your phone. Attendance intake accepts multiple pages by default and saves all pages from one scan or selection as a single document. Confirmed attendance-sheet rows become permanent dated records used by the Calendar and point-falloff calculations; they never set the current point total. Re-scanning the same rows skips duplicates and reports the result. Review detected rows before confirming them. Exception forms can propose booked vacation dates, and holiday calendars can propose dated plant holidays; review each result before saving. Reading PDF pages remains under development.",
+            "Tap Add document, choose its category, then take photos or choose files from your phone. Attendance intake accepts multiple pages by default and saves all pages from one scan or selection as a single document. Confirmed attendance-sheet rows become permanent dated records used by the Calendar and point-falloff calculations; they never set the current point total. Re-scanning the same rows skips duplicates and reports the result. Review detected rows before confirming them. Exception forms can propose booked vacation dates, and holiday calendars can propose dated plant holidays; review each result before saving. Saved documents can be opened in the portrait-aware zoomable viewer with OCR text.",
         )
         ManualSection(
             "PTO, sick time, holidays, and notes",
@@ -1242,7 +1242,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.9.6", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.9.8", style = MaterialTheme.typography.bodySmall)
     }
 }
 

@@ -156,6 +156,31 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
                 }
             }
         }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("USER MANUAL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("How do I use Hub Helper?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                ReferenceQna("How do I get started?", "To get started, enter your hire date, shift, balances, call-ins, and current attendance points in setup. You can edit these values later in Settings.")
+                ReferenceQna("How do I record something that happened?", "To record an event, tap LOG, choose the event type, enter the date and details, then save it.")
+                ReferenceQna("How do I scan an attendance sheet?", "To scan an attendance sheet, open Documents, tap Add document, choose Attendance, select all pages, review the detected dates and point changes, then confirm and save.")
+                ReferenceQna("How do I view a saved document?", "To view a saved document, open Documents and tap View document and OCR. Pinch to zoom and drag the image while zoomed.")
+                ReferenceQna("How do I understand point falloff?", "To understand point falloff, open Calendar or Attendance details. Confirmed dated attendance records fall off individually after their rolling period; the manually entered current total remains authoritative.")
+                ReferenceQna("How do I use the calendar?", "To use the calendar, tap Calendar, choose a month, then tap a day to see its events. Use the always-visible legend to understand each symbol and color.")
+                ReferenceQna("How do I search the contract or policy?", "To search the references, enter at least two characters in Search reference and tap GO or the keyboard Search action. Tap a result to open the matching passage.")
+                ReferenceQna("How do I add a company holiday?", "To add a company holiday, scan or select a holiday calendar in Documents and review the detected dates before saving. Contract holidays are generated automatically; scanned calendars can add exceptions.")
+                ReferenceQna("How do I change the theme?", "To change the theme, open Settings, choose Industrial Instrument, Clear & Easy, or Soft & Friendly, then choose Follow system, Light, or Dark.")
+                ReferenceQna("How do I reset the app?", "To reset the app, open Settings, tap Reset app to zero, and confirm. This clears records and documents, zeros balances, and returns to Settings.")
+                ReferenceQna("How do I protect or back up my data?", "To protect or back up your data, enable app lock in Settings and use Export private backup. Store exported files securely because they are outside the app’s private storage.")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReferenceQna(question: String, answer: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(question, fontWeight = FontWeight.SemiBold)
+        Text(answer, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
