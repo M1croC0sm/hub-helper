@@ -2,6 +2,18 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.11.1 — 2026-08-30
+
+### Added
+
+- Added an offline QR code to Settings that opens the permanent Hub Helper landing page.
+- Added accessible controls to open, copy, or share the download-page link.
+- Documented the sharing workflow in the in-app user manual.
+
+### Fixed
+
+- Explicitly removed network permissions inherited from support libraries so the packaged app remains offline-only.
+
 ## 0.11.0 — 2026-08-30
 
 ### Changed

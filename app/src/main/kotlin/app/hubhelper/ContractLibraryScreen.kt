@@ -169,6 +169,7 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
                 ReferenceQna("How do I search the contract or policy?", "To search the references, enter at least two characters in Search reference and tap GO or the keyboard Search action. Tap a result to open the matching passage.")
                 ReferenceQna("How do I add a company holiday?", "To add a company holiday, scan or select a holiday calendar in Documents and review the detected dates before saving. Contract holidays are generated automatically; scanned calendars can add exceptions.")
                 ReferenceQna("How do I change the theme?", "To change the theme, open Settings, choose Industrial Instrument, Clear & Easy, or Soft & Friendly, then choose Follow system, Light, or Dark.")
+                ReferenceQna("How do I share Hub Helper?", "To share Hub Helper, open Settings and find Share Hub Helper. A coworker can scan the QR code, or you can open, copy, or share the official download-page link.")
                 ReferenceQna("How do I reset the app?", "To reset the app, open Settings, tap Reset app to zero, and confirm. This clears records and documents, zeros balances, and returns to Settings.")
                 ReferenceQna("How do I protect or back up my data?", "To protect or back up your data, enable app lock in Settings and use Export private backup. Store exported files securely because they are outside the app’s private storage.")
             }

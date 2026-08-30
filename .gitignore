@@ -18,6 +18,7 @@ captures/
 *.jpg
 *.jpeg
 *.png
+!app/src/main/res/drawable-nodpi/hub_helper_download_qr.png
 
 # Legacy scan stored with an incorrect Markdown extension
 Light Industrial Attendance Policy.md

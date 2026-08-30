@@ -1,5 +1,11 @@
 package app.hubhelper
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
@@ -45,6 +51,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
@@ -100,6 +110,8 @@ private enum class MainArea(val label: String, val shortLabel: String) {
     SETTINGS("Settings", "Settings"),
     MANUAL("User Manual", "Manual"),
 }
+
+private const val HUB_HELPER_LANDING_PAGE = "https://m1croc0sm.github.io/hub-helper/"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -991,6 +1003,7 @@ private fun SettingsScreen(
         OutlinedButton(onClick = onOpenManual, modifier = Modifier.fillMaxWidth()) {
             Text("Open user manual")
         }
+        ShareHubHelperPanel()
         OutlinedButton(
             onClick = { exportLauncher.launch("hub-helper-backup.zip") },
             modifier = Modifier.fillMaxWidth(),
@@ -1048,7 +1061,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hub Helper 0.11.0 • build 39", style = MaterialTheme.typography.bodySmall)
+        Text("Hub Helper 0.11.1 • build 40", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1084,6 +1097,75 @@ private fun SettingsScreen(
             },
             dismissButton = { TextButton(onClick = { showResetConfirmation = false }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun ShareHubHelperPanel() {
+    val context = LocalContext.current
+    HubPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
+        SectionLabel("Share Hub Helper")
+        Text("Help a coworker find the official Hub Helper download page.", style = MaterialTheme.typography.bodyMedium)
+        Surface(
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .clickable(role = Role.Button) { openHubHelperLandingPage(context) }
+                .semantics { contentDescription = "Open the Hub Helper download page" },
+            color = Color.White,
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.hub_helper_download_qr),
+                contentDescription = null,
+                modifier = Modifier.size(232.dp).padding(8.dp),
+                contentScale = ContentScale.Fit,
+            )
+        }
+        Text(
+            "Scan the code with a phone camera, or use one of the options below.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Button(
+            onClick = { openHubHelperLandingPage(context) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("OPEN DOWNLOAD PAGE") }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { copyHubHelperLink(context) },
+                modifier = Modifier.weight(1f),
+            ) { Text("COPY LINK") }
+            OutlinedButton(
+                onClick = { shareHubHelperLink(context) },
+                modifier = Modifier.weight(1f),
+            ) { Text("SHARE LINK") }
+        }
+    }
+}
+
+private fun openHubHelperLandingPage(context: Context) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HUB_HELPER_LANDING_PAGE)))
+    }.onFailure {
+        Toast.makeText(context, "No browser is available on this phone.", Toast.LENGTH_LONG).show()
+    }
+}
+
+private fun copyHubHelperLink(context: Context) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Hub Helper download page", HUB_HELPER_LANDING_PAGE))
+    Toast.makeText(context, "Hub Helper link copied.", Toast.LENGTH_SHORT).show()
+}
+
+private fun shareHubHelperLink(context: Context) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "Hub Helper")
+        putExtra(Intent.EXTRA_TEXT, "Download Hub Helper: $HUB_HELPER_LANDING_PAGE")
+    }
+    runCatching {
+        context.startActivity(Intent.createChooser(shareIntent, "Share Hub Helper"))
+    }.onFailure {
+        Toast.makeText(context, "No sharing app is available on this phone.", Toast.LENGTH_LONG).show()
     }
 }
 
@@ -1307,7 +1389,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hub Helper 0.11.0", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hub Helper 0.11.1", style = MaterialTheme.typography.bodySmall)
     }
 }
 
