@@ -166,7 +166,7 @@ fun InitialSetupScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Choose a clear photo or PDF to identify the dates when past points fall off. Images are read on-device. Attendance sheets never set your current point total.")
+                Text("Choose clear photos of the attendance table. The app will read the dates, point changes, and running total on-device, then show you a simple list to confirm.")
                 OutlinedButton(
                     onClick = { sheetPicker.launch(arrayOf("image/*", "application/pdf")) },
                     modifier = Modifier.fillMaxWidth(),

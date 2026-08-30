@@ -9,6 +9,8 @@ All notable user-facing changes to Hub Helper are recorded here.
 - Attendance-sheet confirmation reconciles the imported running total with the app’s current attendance balance, preventing historical rows from inflating the total.
 - Setup now asks for the available floating vacation-day allowance and preserves it in backups.
 - Missing attendance-row point amounts continue to be inferred from consecutive running totals.
+- Attendance scans now show a plain-language confirmation list of dates, point changes, and running totals before saving.
+- Setup asks users to confirm the same OCR result immediately after its attendance pages are read.
 
 ## 0.9.1 — 2026-08-29
 

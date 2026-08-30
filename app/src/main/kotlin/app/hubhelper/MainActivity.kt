@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.SideEffect
@@ -86,6 +87,7 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val appScope = rememberCoroutineScope()
+            var setupAttendancePreview by remember { mutableStateOf<SetupAttendancePreview?>(null) }
             val darkMode = themeMode.resolveDarkMode(isSystemInDarkTheme())
             SideEffect {
                 WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -112,12 +114,12 @@ class MainActivity : FragmentActivity() {
                                     val document = documentRepository.importPages(pageUris, DocumentCategory.ATTENDANCE)
                                     val recognizedText = documentOcr.recognize(document)
                                     val parsed = recognizedText?.let { AttendancePrintoutParser().parse(it) }
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "Attendance sheet saved. Review ${parsed?.rows?.size ?: 0} detected rows in Documents for point falloffs.",
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                    setupPreferences.markPointsSheetImported(uriText)
+                                    if (parsed != null) {
+                                        setupAttendancePreview = SetupAttendancePreview(document.id, parsed, uriText)
+                                    } else {
+                                        setupPreferences.markPointsSheetImported(uriText)
+                                        Toast.makeText(this@MainActivity, "No attendance rows were recognized. Try clearer photos.", Toast.LENGTH_LONG).show()
+                                    }
                                 }.onFailure { error ->
                                     Toast.makeText(
                                         this@MainActivity,
@@ -248,6 +250,28 @@ class MainActivity : FragmentActivity() {
                     },
                 )
             }
+            setupAttendancePreview?.let { preview ->
+                AttendanceImportPreviewDialog(
+                    parsed = preview.parsed,
+                    manualTotal = setupData.currentAttendancePoints,
+                    onDismiss = {
+                        setupPreferences.markPointsSheetImported(preview.uriText)
+                        setupAttendancePreview = null
+                    },
+                    onConfirm = {
+                        appScope.launch {
+                            val result = applyAttendanceStatement(
+                                setupData, preview.parsed, preview.documentId, overrideDate ?: LocalDate.now(), attendanceRepository,
+                            )
+                            setupPreferences.save(result.setup)
+                            setupData = result.setup
+                            setupPreferences.markPointsSheetImported(preview.uriText)
+                            setupAttendancePreview = null
+                            Toast.makeText(this@MainActivity, "Attendance confirmed: ${result.addedCount} saved, ${result.skippedCount} already present.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                )
+            }
         }
     }
 
@@ -268,6 +292,12 @@ class MainActivity : FragmentActivity() {
         biometricPrompt.authenticate(appLockPromptInfo())
     }
 }
+
+private data class SetupAttendancePreview(
+    val documentId: String,
+    val parsed: ParsedAttendanceStatement,
+    val uriText: String,
+)
 
 private fun importedAttendanceType(comment: String, adjustmentHalfPoints: Int): AttendanceEventType {
     if (adjustmentHalfPoints < 0) return AttendanceEventType.ATTENDANCE_CREDIT
@@ -321,7 +351,10 @@ private suspend fun applyAttendanceStatement(
         ?.multiply(java.math.BigDecimal(2))
         ?.toInt()
         ?: 0
-    val sheetTotal = parsed.currentTotalHalfPoints
+    val manualTotal = setup.currentAttendancePoints.toBigDecimalOrNull()
+        ?.multiply(java.math.BigDecimal(2))
+        ?.toInt()
+    val sheetTotal = manualTotal ?: parsed.currentTotalHalfPoints
     if (sheetTotal != null) {
         val datedPoints = AttendanceCalculator().summarize(repository.allEvents(), calculationDate).confirmedPoints.value
         val reconciledOpening = sheetTotal - datedPoints

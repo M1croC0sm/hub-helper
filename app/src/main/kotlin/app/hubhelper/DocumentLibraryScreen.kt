@@ -43,6 +43,7 @@ import app.hubhelper.domain.AttendancePrintoutParser
 import app.hubhelper.domain.ParsedAttendanceStatement
 import app.hubhelper.domain.WorkDocument
 import app.hubhelper.domain.WorkNote
+import app.hubhelper.domain.HalfPoints
 import app.hubhelper.domain.BookedPtoDay
 import app.hubhelper.domain.ExceptionFormParser
 import app.hubhelper.domain.PlantHoliday
@@ -76,6 +77,7 @@ fun DocumentLibraryScreen(
     var deleteCandidate by remember { mutableStateOf<WorkDocument?>(null) }
     var noteText by remember { mutableStateOf("") }
     var noteDeleteCandidate by remember { mutableStateOf<WorkNote?>(null) }
+    var attendancePreview by remember { mutableStateOf<Pair<WorkDocument, ParsedAttendanceStatement>?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         val selectedCategory = category
         if (selectedCategory != null && uris.isNotEmpty()) onImport(uris, selectedCategory)
@@ -159,9 +161,15 @@ fun DocumentLibraryScreen(
                             val parsed = remember(recognizedText) { AttendancePrintoutParser().parse(recognizedText) }
                             Text("${parsed.rows.size} dated attendance rows recognized. These become permanent calendar records.")
                             Text("Current points remain manually controlled in Settings.", fontWeight = FontWeight.SemiBold)
+                            parsed.rows.filter { it.adjustmentHalfPoints != null && it.adjustmentHalfPoints != 0 }.forEach { row ->
+                                Text(
+                                    "${row.date.monthDayYear()}  •  change ${HalfPoints(row.adjustmentHalfPoints!!).asDisplayValue()}  •  total ${HalfPoints(row.runningTotalHalfPoints).asDisplayValue()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                             if (parsed.rows.isNotEmpty()) {
-                                Button(onClick = { onApplyAttendanceStatement(document, parsed) }) {
-                                    Text("Confirm and save attendance rows")
+                                Button(onClick = { attendancePreview = document to parsed }) {
+                                    Text("Review and confirm attendance rows")
                                 }
                             }
                             parsed.warnings.forEach { Text("Review: $it", style = MaterialTheme.typography.bodySmall) }
@@ -337,6 +345,60 @@ fun DocumentLibraryScreen(
             dismissButton = { TextButton(onClick = { noteDeleteCandidate = null }) { Text("Cancel") } },
         )
     }
+    attendancePreview?.let { (document, parsed) ->
+        AttendanceImportPreviewDialog(
+            parsed = parsed,
+            manualTotal = null,
+            onDismiss = { attendancePreview = null },
+            onConfirm = {
+                onApplyAttendanceStatement(document, parsed)
+                attendancePreview = null
+            },
+        )
+    }
+}
+
+@Composable
+fun AttendanceImportPreviewDialog(
+    parsed: ParsedAttendanceStatement,
+    manualTotal: String?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val rows = parsed.rows.filter { it.adjustmentHalfPoints != null && it.adjustmentHalfPoints != 0 }
+    val detectedTotal = parsed.currentTotalHalfPoints?.let(::HalfPoints)?.asDisplayValue()
+    val totalMismatch = manualTotal?.toBigDecimalOrNull()?.let { entered ->
+        detectedTotal?.toBigDecimalOrNull()?.compareTo(entered) != 0
+    } == true
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Check attendance dates") },
+        text = {
+            Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("We found ${rows.size} dated row${if (rows.size == 1) "" else "s"}. Only the rows below will be saved.")
+                if (detectedTotal != null) Text("Detected sheet total: $detectedTotal", fontWeight = FontWeight.SemiBold)
+                if (manualTotal != null && totalMismatch) {
+                    Text("Your entered total is $manualTotal. The sheet total does not match, so your entered total will be kept.", color = MaterialTheme.colorScheme.error)
+                }
+                if (rows.isEmpty()) Text("No complete point rows were found. Nothing will be saved.")
+                rows.forEach { row ->
+                    val change = HalfPoints(row.adjustmentHalfPoints!!).asDisplayValue()
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(10.dp)) {
+                            Text(row.date.monthDayYear(), fontWeight = FontWeight.SemiBold)
+                            Text("Point change: $change   •   Running total: ${HalfPoints(row.runningTotalHalfPoints).asDisplayValue()}")
+                            if (row.comment.isNotBlank()) Text(row.comment, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                parsed.warnings.forEach { Text("Review: $it", style = MaterialTheme.typography.bodySmall) }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm, enabled = rows.isNotEmpty()) { Text("Confirm and save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 private fun newCameraUri(context: Context): Uri {
