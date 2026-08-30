@@ -1,7 +1,7 @@
 const checksum = document.querySelector('#checksum');
 const copy = document.querySelector('#copy-checksum');
 
-const apkChecksum = 'a50973decb20f04d29267bbd11915f2f1e79d83c98171d7dda9e7d0ddb782b2b';
+const apkChecksum = 'cbd7aa5c53f2c919cbf725519d06ee1fdfba013cf2723a55eb0c947944dca0ba';
 
 if (apkChecksum) {
   checksum.textContent = apkChecksum;
