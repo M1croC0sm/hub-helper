@@ -2,6 +2,12 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.10.3 — 2026-08-30
+
+### Changed
+
+- Payday tile is now clearly faded when the next payday is distant and turns confirmation green on payday.
+
 ## 0.10.2 — 2026-08-30
 
 ### Changed
