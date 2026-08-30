@@ -157,11 +157,11 @@ fun DocumentLibraryScreen(
                         if (expandedId == document.id) Text(recognizedText)
                         if (document.category == DocumentCategory.ATTENDANCE) {
                             val parsed = remember(recognizedText) { AttendancePrintoutParser().parse(recognizedText) }
-                            Text("${parsed.rows.size} dated rows recognized. These dates are used only to calculate point falloffs.")
-                            Text("Set your current point total manually in Settings.", fontWeight = FontWeight.SemiBold)
+                            Text("${parsed.rows.size} dated attendance rows recognized. These become permanent calendar records.")
+                            Text("Current points remain manually controlled in Settings.", fontWeight = FontWeight.SemiBold)
                             if (parsed.rows.isNotEmpty()) {
                                 Button(onClick = { onApplyAttendanceStatement(document, parsed) }) {
-                                    Text("Use dated entries for falloffs")
+                                    Text("Confirm and save attendance rows")
                                 }
                             }
                             parsed.warnings.forEach { Text("Review: $it", style = MaterialTheme.typography.bodySmall) }

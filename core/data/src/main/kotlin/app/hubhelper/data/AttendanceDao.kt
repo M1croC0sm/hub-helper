@@ -15,6 +15,14 @@ interface AttendanceDao {
     @Query("SELECT COUNT(*) FROM attendance_events WHERE sourceDocumentId = :documentId")
     suspend fun countBySourceDocument(documentId: String): Int
 
+    @Query("SELECT * FROM attendance_events WHERE occurredEpochDay = :occurredEpochDay AND type = :type AND halfPoints = :halfPoints AND status = :status")
+    suspend fun findMatching(
+        occurredEpochDay: Long,
+        type: String,
+        halfPoints: Int,
+        status: String,
+    ): List<AttendanceEventEntity>
+
     @Insert
     suspend fun insert(event: AttendanceEventEntity): Long
 

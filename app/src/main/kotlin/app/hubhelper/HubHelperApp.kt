@@ -958,7 +958,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.9.0 • build 24", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.9.1 • build 25", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1187,7 +1187,7 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "Documents and printouts",
-            "Tap Add document, choose its category, then take photos or choose files from your phone. Attendance intake accepts multiple pages by default and saves all pages from one scan or selection as a single document. Attendance sheets provide dated rows only for point-falloff calculations and never set the current point total. Review detected rows before applying them. Exception forms can propose booked vacation dates, and holiday calendars can propose dated plant holidays; review each result before saving. Reading PDF pages remains under development.",
+            "Tap Add document, choose its category, then take photos or choose files from your phone. Attendance intake accepts multiple pages by default and saves all pages from one scan or selection as a single document. Confirmed attendance-sheet rows become permanent dated records used by the Calendar and point-falloff calculations; they never set the current point total. Re-scanning the same rows skips duplicates and reports the result. Review detected rows before confirming them. Exception forms can propose booked vacation dates, and holiday calendars can propose dated plant holidays; review each result before saving. Reading PDF pages remains under development.",
         )
         ManualSection(
             "PTO, sick time, holidays, and notes",
@@ -1195,7 +1195,7 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "Calendar",
-            "Calendar opens with all twelve months. A stronger red month indicator means more confirmed attendance points were accrued in that month; the printed point value remains authoritative. Tap a month to see its days. The pinned legend identifies green point falloffs, confirmed and estimated attendance credits, accrued points, call-ins, sick time, PTO, and plant holidays. Estimated credits use an outlined marker. Tap a legend item to filter, tap a day for full details, or log something with that date already selected. Editable entries can be changed or removed from the day details. Manually entered points without dates cannot appear on the calendar.",
+            "Calendar opens with all twelve months. A stronger red month indicator means more confirmed attendance points were accrued in that month; the printed point value remains authoritative. Tap a month to see its days. The pinned legend identifies green point falloffs, confirmed and estimated attendance credits, accrued points, call-ins, sick time, PTO, and plant holidays. Estimated credits use an outlined marker. Tap a legend item to filter, tap a day for full details, or log something with that date already selected. Editable entries can be changed or removed from the day details. Manually entered points without dates cannot appear on the calendar; confirmed attendance-sheet rows do have dates and do appear.",
         )
         ManualSection(
             "Search",
@@ -1217,7 +1217,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.9.0", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.9.1", style = MaterialTheme.typography.bodySmall)
     }
 }
 

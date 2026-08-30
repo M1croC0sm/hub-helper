@@ -153,14 +153,14 @@ class MainActivity : FragmentActivity() {
                     onEditSetup = { showSetup = true },
                     onApplyAttendanceStatement = { document, parsed ->
                         appScope.launch {
-                            val updatedData = applyAttendanceStatement(
+                            val importResult = applyAttendanceStatement(
                                 setupData, parsed, document.id, overrideDate ?: LocalDate.now(), attendanceRepository,
                             )
-                            setupPreferences.save(updatedData)
-                            setupData = updatedData
+                            setupPreferences.save(importResult.setup)
+                            setupData = importResult.setup
                             Toast.makeText(
                                 this@MainActivity,
-                                "Attendance sheet applied: ${parsed.rows.size} dated rows added for falloff calculations. Current points were not changed.",
+                                "Attendance sheet confirmed: ${importResult.addedCount} saved, ${importResult.skippedCount} already present. Current points were not changed.",
                                 Toast.LENGTH_LONG,
                             ).show()
                         }
@@ -281,26 +281,27 @@ private fun importedAttendanceType(comment: String, adjustmentHalfPoints: Int): 
 
 private fun displayHalfPoints(halfPoints: Int): String = HalfPoints(halfPoints).asDisplayValue()
 
+private data class AttendanceImportResult(
+    val setup: SetupData,
+    val addedCount: Int,
+    val skippedCount: Int,
+)
+
 private suspend fun applyAttendanceStatement(
     setup: SetupData,
     parsed: ParsedAttendanceStatement,
     documentId: String,
     calculationDate: LocalDate,
     repository: AttendanceRepository,
-): SetupData {
-    if (repository.hasSourceDocument(documentId)) return setup
+): AttendanceImportResult {
     val usableRows = parsed.rows.filter {
         it.adjustmentHalfPoints != null && it.adjustmentHalfPoints != 0 && !isAnnualFalloff(it.comment)
     }
-    val importedActiveTotal = usableRows.sumOf { row ->
-        val adjustment = row.adjustmentHalfPoints!!
-        if (!row.date.isAfter(calculationDate) &&
-            (adjustment < 0 || calculationDate.isBefore(row.date.plusMonths(12)))
-        ) adjustment else 0
-    }
+    var importedActiveTotal = 0
+    var addedCount = 0
     usableRows.forEach { row ->
         val adjustment = row.adjustmentHalfPoints!!
-        repository.add(
+        val added = repository.addIfAbsent(
             occurredOn = row.date,
             type = importedAttendanceType(row.comment, adjustment),
             points = HalfPoints(kotlin.math.abs(adjustment)),
@@ -308,12 +309,22 @@ private suspend fun applyAttendanceStatement(
             note = row.comment,
             sourceDocumentId = documentId,
         )
+        if (added) {
+            addedCount++
+            if (!row.date.isAfter(calculationDate) &&
+            (adjustment < 0 || calculationDate.isBefore(row.date.plusMonths(12)))
+            ) importedActiveTotal += adjustment
+        }
     }
     val openingHalfPoints = setup.attendanceOpeningRemainder.toBigDecimalOrNull()
         ?.multiply(java.math.BigDecimal(2))
         ?.toInt()
         ?: 0
-    return setup.copy(attendanceOpeningRemainder = displayHalfPoints(openingHalfPoints - importedActiveTotal))
+    return AttendanceImportResult(
+        setup = setup.copy(attendanceOpeningRemainder = displayHalfPoints(openingHalfPoints - importedActiveTotal)),
+        addedCount = addedCount,
+        skippedCount = usableRows.size - addedCount,
+    )
 }
 
 private fun isAnnualFalloff(comment: String): Boolean {

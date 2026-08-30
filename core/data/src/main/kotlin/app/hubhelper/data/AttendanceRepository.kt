@@ -38,6 +38,23 @@ class AttendanceRepository internal constructor(private val dao: AttendanceDao) 
         )
     }
 
+    /** Inserts an event unless the same dated event (including its details) already exists. */
+    suspend fun addIfAbsent(
+        occurredOn: LocalDate,
+        type: AttendanceEventType,
+        points: HalfPoints,
+        status: AttendanceEventStatus,
+        note: String?,
+        sourceDocumentId: String? = null,
+    ): Boolean {
+        val normalizedNote = note.canonicalNote()
+        val duplicate = dao.findMatching(occurredOn.toEpochDay(), type.name, points.value, status.name)
+            .any { it.note.canonicalNote() == normalizedNote }
+        if (duplicate) return false
+        add(occurredOn, type, points, status, note, sourceDocumentId)
+        return true
+    }
+
     suspend fun delete(event: AttendanceEvent) {
         val numericId = event.id.toLongOrNull() ?: return
         dao.delete(event.toEntity(numericId))
@@ -53,6 +70,12 @@ class AttendanceRepository internal constructor(private val dao: AttendanceDao) 
             AttendanceRepository(HubHelperDatabase.get(context).attendanceDao())
     }
 }
+
+private fun String?.canonicalNote(): String = this.orEmpty()
+    .lowercase()
+    .replace(Regex("[^a-z0-9]+"), " ")
+    .trim()
+    .replace(Regex("\\s+"), " ")
 
 private fun AttendanceEventEntity.toDomain() = AttendanceEvent(
     id = id.toString(),

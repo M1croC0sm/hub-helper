@@ -2,6 +2,16 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.1 — 2026-08-29
+
+### Changed
+
+- Confirmed attendance-sheet rows are now permanent dated attendance records and appear in Calendar, history, and calculations.
+- Repeated scans skip matching dated events using a normalized row identity while preserving distinct same-day details.
+- Attendance OCR parsing requires the attendance-table header and row evidence, ignoring unrelated dates and footer text.
+- Import confirmation reports how many rows were saved versus already present.
+- Updated the manual and import wording to describe confirmation and durable records.
+
 ## 0.9.0 — 2026-08-29
 
 ### Added

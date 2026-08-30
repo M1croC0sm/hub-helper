@@ -82,4 +82,22 @@ class AttendancePrintoutParserTest {
         assertEquals(2, result.rows.size)
         assertEquals(-1, result.currentTotalHalfPoints)
     }
+
+    @Test
+    fun `ignores dates outside the attendance table`() {
+        val text = """
+            Employee hired 1-2-20
+            Printed 8-29-26
+            Point History
+            Date Comment Points to Date
+            8-03-26 1pt Absent 1.0
+            Supervisor signature 8-04-26
+            8-04-26 1pt should not be read
+        """.trimIndent()
+
+        val result = AttendancePrintoutParser().parse(text)
+
+        assertEquals(1, result.rows.size)
+        assertEquals("2026-08-03", result.rows.single().date.toString())
+    }
 }

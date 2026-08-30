@@ -24,14 +24,24 @@ class AttendancePrintoutParser {
         """(-?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:pt|pts|point|points)\b""",
         RegexOption.IGNORE_CASE,
     )
+    private val rowKeywords = listOf("absent", "absence", "tardy", "late", "call", "roll", "fall", "early", "sick", "point")
 
     fun parse(text: String): ParsedAttendanceStatement {
         val warnings = mutableListOf<String>()
-        val historyStart = text.indexOf("Point History", ignoreCase = true)
-        val historyText = if (historyStart >= 0) text.substring(historyStart + "Point History".length) else text
-        val lines = historyText.lineSequence().map(::normalize).filter(String::isNotBlank).toList()
+        val normalizedLines = text.lineSequence().map(::normalize).filter(String::isNotBlank).toList()
+        val tableStart = normalizedLines.indexOfFirst { line ->
+            line.contains("point history", ignoreCase = true) ||
+                (line.contains("date", ignoreCase = true) && line.contains("point", ignoreCase = true))
+        }
+        if (tableStart < 0) {
+            return ParsedAttendanceStatement(emptyList(), null, listOf("Attendance table header was not recognized; no rows were imported"))
+        }
+        val lines = normalizedLines.drop(tableStart + 1)
+            .takeWhile { line -> !isTableFooter(line) }
         val inlineRows = lines.mapNotNull(::parseInlineRow)
-        val allDates = lines.mapNotNull { line -> datePattern.find(line)?.groupValues?.get(1)?.let(::parseDate) }
+        val allDates = lines.filter(::looksLikeAttendanceRow).mapNotNull { line ->
+            datePattern.find(line)?.groupValues?.get(1)?.let(::parseDate)
+        }
         val standaloneTotals = lines.mapNotNull { line ->
             line.takeIf { standaloneNumber.matches(it) }?.let(::toHalfPoints)?.takeIf { it in -2..16 }
         }
@@ -48,6 +58,7 @@ class AttendancePrintoutParser {
     }
 
     private fun parseInlineRow(line: String): ParsedAttendanceRow? {
+        if (!looksLikeAttendanceRow(line)) return null
         val match = datePattern.find(line) ?: return null
         val date = parseDate(match.groupValues[1]) ?: return null
         val remainder = line.substring(match.range.last + 1).trim().trim('|')
@@ -102,6 +113,21 @@ class AttendancePrintoutParser {
         .replace('—', '-')
         .replace(Regex("-\\s+(?=\\d|\\.)"), "-")
         .trim()
+
+    private fun looksLikeAttendanceRow(line: String): Boolean {
+        val date = datePattern.find(line) ?: return false
+        val remainder = line.substring(date.range.last + 1)
+        val dateOnly = remainder.trim().isEmpty()
+        return dateOnly || pointAdjustment.containsMatchIn(remainder) ||
+            rowKeywords.any { remainder.contains(it, ignoreCase = true) }
+    }
+
+    private fun isTableFooter(line: String): Boolean {
+        val footer = listOf("employee signature", "supervisor signature", "printed by", "prepared by", "notes:", "end of report")
+            .any { line.contains(it, ignoreCase = true) }
+        if (footer) return true
+        return false
+    }
 
     private fun toHalfPoints(value: String): Int? {
         val decimal = normalize(value).toBigDecimalOrNull() ?: return null
