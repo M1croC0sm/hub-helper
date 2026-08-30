@@ -419,7 +419,7 @@ private fun QuickDocumentForm(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Text("Choose the evidence type, then select an image or PDF from your phone.")
-        DocumentCategory.entries.chunked(2).forEach { row ->
+        listOf(DocumentCategory.ATTENDANCE, DocumentCategory.HOLIDAY_CALENDAR, DocumentCategory.EXCEPTION_FORM, DocumentCategory.PAY, DocumentCategory.OTHER).chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 row.forEach { option ->
                     FilterChip(selected = category == option, onClick = { onCategory(option) }, label = { Text(documentLabel(option)) })

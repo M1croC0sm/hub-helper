@@ -62,6 +62,26 @@ object WeeklyReminderScheduler {
         manager.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
+    fun notifyNow(context: Context) {
+        createNotificationChannel(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val intent = Intent(context, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        manager.notify(
+            1001,
+            NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setContentTitle("Hubb Helper")
+                .setContentText("Anything from this workweek to log?")
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build(),
+        )
+    }
+
     private fun createNotificationChannel(context: Context) {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Weekly check-in", NotificationManager.IMPORTANCE_DEFAULT).apply {
@@ -76,25 +96,7 @@ object WeeklyReminderScheduler {
 
 class WeeklyCheckInWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
-        val manager = applicationContext.getSystemService(NotificationManager::class.java)
-        val intent = Intent(applicationContext, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            applicationContext,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        manager.notify(
-            1001,
-            NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_popup_reminder)
-                .setContentTitle("Hubb Helper")
-                .setContentText("Anything from this workweek to log?")
-                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                .setContentIntent(pendingIntent)
-                .setAutoCancel(true)
-                .build(),
-        )
+        WeeklyReminderScheduler.notifyNow(applicationContext)
         WeeklyReminderScheduler.apply(applicationContext, ReminderPreferences(applicationContext).load())
         return Result.success()
     }

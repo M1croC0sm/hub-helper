@@ -2,23 +2,34 @@ package app.hubhelper
 
 import android.net.Uri
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,12 +44,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.core.content.FileProvider
 import java.io.File
 import java.util.UUID
+import java.util.zip.ZipInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableFloatStateOf
 import app.hubhelper.domain.DocumentCategory
+import app.hubhelper.data.DocumentRepository
 import app.hubhelper.domain.AttendancePrintoutParser
 import app.hubhelper.domain.ParsedAttendanceStatement
 import app.hubhelper.domain.WorkDocument
@@ -67,12 +82,9 @@ fun DocumentLibraryScreen(
     onDeleteNote: (WorkNote) -> Unit,
 ) {
     val context = LocalContext.current
-    val keyboard = LocalSoftwareKeyboardController.current
     var category by remember { mutableStateOf<DocumentCategory?>(null) }
     var showAddDocument by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    var showSearchResults by remember { mutableStateOf(false) }
-    var selectedSearchDocument by remember { mutableStateOf<WorkDocument?>(null) }
+    var viewingDocument by remember { mutableStateOf<WorkDocument?>(null) }
     var expandedId by remember { mutableStateOf<String?>(null) }
     var deleteCandidate by remember { mutableStateOf<WorkDocument?>(null) }
     var noteText by remember { mutableStateOf("") }
@@ -92,10 +104,6 @@ fun DocumentLibraryScreen(
             showCaptureMore = true
         }
     }
-    val searchMatches = documents.filter { document ->
-        query.isBlank() || document.title.contains(query, ignoreCase = true) ||
-            document.ocrText?.contains(query, ignoreCase = true) == true
-    }
     val visible = documents
 
     Column(
@@ -109,41 +117,6 @@ fun DocumentLibraryScreen(
             onClick = { category = null; showAddDocument = true },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Add document") }
-        if (documents.isNotEmpty()) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Find something in saved documents") },
-                placeholder = { Text("Example: vacation") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); showSearchResults = true }),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Button(
-                onClick = { keyboard?.hide(); showSearchResults = true },
-                enabled = query.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("SEARCH SAVED DOCUMENTS") }
-            if (showSearchResults) {
-                HubPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
-                    SectionLabel("Search results")
-                    Text("${searchMatches.size} result${if (searchMatches.size == 1) "" else "s"} for “$query”")
-                    if (searchMatches.isEmpty()) Text("Nothing matched saved titles or detected text.")
-                    searchMatches.forEach { document ->
-                        TextButton(
-                            onClick = { selectedSearchDocument = document },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.fillMaxWidth()) {
-                                Text(document.title, fontWeight = FontWeight.SemiBold)
-                                Text(friendlyCategory(document.category), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-            }
-        }
         Text("Saved documents", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (visible.isEmpty()) Text(if (documents.isEmpty()) "No documents added yet." else "Nothing matched your search.")
         visible.forEach { document ->
@@ -151,6 +124,7 @@ fun DocumentLibraryScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(document.title, fontWeight = FontWeight.SemiBold)
                     Text("${friendlyCategory(document.category)} • ${friendlyTextStatus(document)}")
+                    OutlinedButton(onClick = { viewingDocument = document }, modifier = Modifier.fillMaxWidth()) { Text("VIEW DOCUMENT AND OCR") }
                     val recognizedText = document.ocrText
                     if (!recognizedText.isNullOrBlank()) {
                         OutlinedButton(onClick = {
@@ -251,7 +225,7 @@ fun DocumentLibraryScreen(
             text = {
                 Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (category == null) {
-                        DocumentCategory.entries.forEach { option ->
+                        documentCategoryChoices.forEach { option ->
                             OutlinedButton(onClick = { category = option }, modifier = Modifier.fillMaxWidth()) {
                                 Text(friendlyCategory(option))
                             }
@@ -283,19 +257,8 @@ fun DocumentLibraryScreen(
         )
     }
 
-    selectedSearchDocument?.let { document ->
-        AlertDialog(
-            onDismissRequest = { selectedSearchDocument = null },
-            title = { Text(document.title) },
-            text = {
-                Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ProvenanceBadge(if (document.ocrText.isNullOrBlank()) "Source" else "OCR")
-                    Text(friendlyCategory(document.category))
-                    Text(document.ocrText?.takeIf(String::isNotBlank) ?: "No searchable text is available. The original remains saved.")
-                }
-            },
-            confirmButton = { TextButton(onClick = { selectedSearchDocument = null }) { Text("Done") } },
-        )
+    viewingDocument?.let { document ->
+        DocumentViewerDialog(document = document, onDismiss = { viewingDocument = null })
     }
 
     if (showCaptureMore) {
@@ -401,6 +364,66 @@ fun AttendanceImportPreviewDialog(
     )
 }
 
+@Composable
+private fun DocumentViewerDialog(document: WorkDocument, onDismiss: () -> Unit) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, document) {
+        value = withContext(Dispatchers.IO) { loadDocumentPreview(document) }
+    }
+    var scale by remember(document) { mutableFloatStateOf(1f) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(document.title) },
+        text = {
+            Column(Modifier.heightIn(max = 620.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(friendlyCategory(document.category), style = MaterialTheme.typography.labelLarge)
+                if (bitmap != null) {
+                    Box(Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 430.dp).clip(MaterialTheme.shapes.medium)) {
+                        androidx.compose.foundation.Image(
+                            bitmap = bitmap!!.asImageBitmap(),
+                            contentDescription = "Original document page. Pinch or drag to zoom.",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale).pointerInput(Unit) {
+                                detectTransformGestures { _, _, zoom, _ -> scale = (scale * zoom).coerceIn(1f, 5f) }
+                            },
+                        )
+                    }
+                    Text("Pinch or drag to zoom • zoom ${"%.1f".format(scale)}×", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("This document preview is not available, but the original file is saved securely on this device.")
+                }
+                HorizontalDivider()
+                Text("Detected text", fontWeight = FontWeight.SemiBold)
+                Text(document.ocrText?.takeIf(String::isNotBlank) ?: "OCR text is not available yet.")
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
+}
+
+private fun loadDocumentPreview(document: WorkDocument): Bitmap? = runCatching {
+    val file = File(document.privatePath)
+    when {
+        document.mimeType == DocumentRepository.MULTI_PAGE_MIME -> ZipInputStream(file.inputStream()).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) return@use BitmapFactory.decodeStream(zip)
+                entry = zip.nextEntry
+            }
+            null
+        }
+        document.mimeType == "application/pdf" || file.extension.equals("pdf", ignoreCase = true) -> {
+            PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
+                if (renderer.pageCount == 0) null else renderer.openPage(0).use { page ->
+                    Bitmap.createBitmap(page.width * 2, page.height * 2, Bitmap.Config.ARGB_8888).also { bitmap ->
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    }
+                }
+            }
+        }
+        else -> BitmapFactory.decodeFile(file.absolutePath)
+    }
+}.getOrNull()
+
 private fun newCameraUri(context: Context): Uri {
     val file = File(context.cacheDir, "camera-captures/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
     return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
@@ -417,6 +440,14 @@ private fun friendlyCategory(category: DocumentCategory): String = when (categor
     DocumentCategory.CONTRACT -> "Union contract"
     DocumentCategory.OTHER -> "Something else"
 }
+
+private val documentCategoryChoices = listOf(
+    DocumentCategory.ATTENDANCE,
+    DocumentCategory.HOLIDAY_CALENDAR,
+    DocumentCategory.EXCEPTION_FORM,
+    DocumentCategory.PAY,
+    DocumentCategory.OTHER,
+)
 
 private fun friendlyTextStatus(document: WorkDocument): String = when (document.ocrStatus.name) {
     "COMPLETE" -> "text ready"

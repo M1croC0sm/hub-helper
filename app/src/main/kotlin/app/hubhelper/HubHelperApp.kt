@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.TopAppBar
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -131,6 +132,7 @@ fun HubHelperApp(
     var showGlobalLog by remember { mutableStateOf(false) }
     var logDate by remember { mutableStateOf<LocalDate?>(null) }
     val appContext = LocalContext.current.applicationContext
+    BackHandler(enabled = selectedArea != MainArea.HOME) { selectedArea = MainArea.HOME }
     val events by attendanceRepository.events.collectAsState(initial = emptyList())
     val timeAdjustments by timeBalanceRepository.adjustments.collectAsState(initial = emptyList())
     val documents by documentRepository.documents.collectAsState(initial = emptyList())
@@ -865,7 +867,16 @@ private fun SettingsScreen(
     onDeletePastPoint: (app.hubhelper.domain.AttendanceEvent) -> Unit,
 ) {
     val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    var reminderNotice by remember { mutableStateOf<String?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            reminderNotice = "Notifications are allowed. Your reminder is scheduled."
+            onReminderChanged(reminderPreference.copy(enabled = true))
+        } else {
+            reminderNotice = "Notifications are blocked. Allow notifications in Android Settings to receive reminders."
+            onReminderChanged(reminderPreference.copy(enabled = false))
+        }
+    }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         uri?.let(onExport)
     }
@@ -936,13 +947,25 @@ private fun SettingsScreen(
                     if (enabled && Build.VERSION.SDK_INT >= 33 &&
                         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                     ) {
+                        reminderNotice = "Android will ask for notification permission."
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        onReminderChanged(reminderPreference.copy(enabled = enabled))
                     }
-                    onReminderChanged(reminderPreference.copy(enabled = enabled))
                 },
             )
             Text(if (reminderPreference.enabled) "Reminder enabled" else "Reminder disabled")
         }
+        OutlinedButton(onClick = {
+            if (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                WeeklyReminderScheduler.notifyNow(context)
+                reminderNotice = "Test notification sent."
+            } else {
+                reminderNotice = "Allow notifications first, then try the test again."
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text("Send test reminder") }
+        reminderNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         DayOfWeek.entries.chunked(4).forEach { days ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 days.forEach { day ->
@@ -960,7 +983,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.9.5 • build 29", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.9.6 • build 30", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1219,7 +1242,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.9.5", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.9.6", style = MaterialTheme.typography.bodySmall)
     }
 }
 

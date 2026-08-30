@@ -532,7 +532,7 @@ private fun buildCalendarMarkers(
         } else {
             markers += CalendarMarker(
                 "attendance-${event.id}", event.occurredOn, MarkerType.POINT_ACCRUED,
-                attendanceTypeLabel(event.type), "−${event.points.asDisplayValue()} points • ${event.status.displayName()}",
+                attendanceTypeLabel(event.type), "+${event.points.asDisplayValue()} point${if (event.points.value == 2) "s" else ""} accrued • ${event.status.displayName()}",
                 MarkerSource.Attendance(event), confirmed = event.status == AttendanceEventStatus.CONFIRMED,
             )
             if (event.status == AttendanceEventStatus.CONFIRMED) {

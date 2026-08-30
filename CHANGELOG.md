@@ -2,6 +2,16 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.6 — 2026-08-29
+
+### Changed
+
+- Simplified document categories to attendance, holiday calendar, PTO exception form, pay, and other.
+- Removed document search and added a direct document viewer with zoomable original previews and OCR text.
+- Corrected calendar attendance wording to describe points accrued while retaining the red point marker.
+- Android Back now returns from app sections to Home instead of leaving the app.
+- Reminder setup now handles notification permission correctly and provides a test notification action.
+
 ## 0.9.5 — 2026-08-29
 
 ### Fixed
