@@ -2,10 +2,14 @@ package app.hubhelper
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -33,6 +37,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
 import app.hubhelper.domain.PlantHoliday
 
 private data class BundledReference(val title: String, val assetName: String, val sourceNote: String)
@@ -60,6 +65,7 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
     var query by remember { mutableStateOf("") }
     var selectedReference by remember { mutableStateOf<SelectedReference?>(null) }
     var showSearchResults by remember { mutableStateOf(false) }
+    var showAllHolidays by remember { mutableStateOf(false) }
     val matches = remember(query, references) { searchReferenceLines(references.map { it.second }, query) }
 
     selectedReference?.let { selected ->
@@ -80,22 +86,22 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Offline reference library", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text("Search the current contract and attendance policy. Results open directly at the matching passage. Your reviewed plant holidays are listed below.")
+        Text("Reference", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        Text("Search your contract, policies and plant calendar.", style = MaterialTheme.typography.bodyLarge)
+        Text("OFFLINE REFERENCE LIBRARY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
             value = query,
             onValueChange = { query = it; showSearchResults = false },
-            label = { Text("Search contract and policy") },
+            label = { Text("Search reference…") },
+            leadingIcon = { Text("⌕", style = MaterialTheme.typography.titleLarge) },
+            trailingIcon = {
+                TextButton(onClick = { keyboard?.hide(); showSearchResults = true }, enabled = query.length >= 2) { Text("GO") }
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); showSearchResults = true }),
             modifier = Modifier.fillMaxWidth(),
         )
-        Button(
-            onClick = { keyboard?.hide(); showSearchResults = true },
-            enabled = query.length >= 2,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("SEARCH REFERENCE") }
         if (showSearchResults) {
             HubPanel(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.primary) {
                 SectionLabel("Search results")
@@ -117,25 +123,35 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
         }
         references.forEachIndexed { index, referenceWithText ->
             val reference = referenceWithText.first
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(reference.title, fontWeight = FontWeight.SemiBold)
-                    Text(reference.sourceNote, style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = { selectedReference = SelectedReference(index) }) {
-                        Text("Read full document")
+            Card(
+                Modifier.fillMaxWidth().clickable { selectedReference = SelectedReference(index) },
+            ) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("▤", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(reference.title, fontWeight = FontWeight.SemiBold)
+                        Text(reference.sourceNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Plant holidays", fontWeight = FontWeight.SemiBold)
-                Text("Reviewed dates imported from your annual holiday calendar.", style = MaterialTheme.typography.bodySmall)
+                Text("PLANT CALENDAR", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 if (holidays.isEmpty()) {
                     Text("No reviewed holidays loaded. Add the annual calendar in Documents.")
                 } else {
-                    holidays.forEach { holiday ->
-                        Text("${holiday.date.monthDayYear()} • ${holiday.name}")
+                    val next = holidays.firstOrNull { !it.date.isBefore(java.time.LocalDate.now()) } ?: holidays.first()
+                    Text("Next plant holiday", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(next.date.monthDayYear(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(next.name, style = MaterialTheme.typography.bodyLarge)
+                    TextButton(onClick = { showAllHolidays = !showAllHolidays }) {
+                        Text(if (showAllHolidays) "Hide all holidays" else "View all holidays →")
+                    }
+                    if (showAllHolidays) {
+                        holidays.forEach { holiday -> Text("${holiday.date.monthDayYear()} • ${holiday.name}") }
                     }
                 }
             }

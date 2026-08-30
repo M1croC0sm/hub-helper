@@ -4,13 +4,16 @@ import android.net.Uri
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
+import android.media.ExifInterface
 import android.os.ParcelFileDescriptor
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +38,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +53,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.util.UUID
 import java.util.zip.ZipInputStream
+import java.io.ByteArrayInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.produceState
@@ -370,14 +376,16 @@ private fun DocumentViewerDialog(document: WorkDocument, onDismiss: () -> Unit) 
         value = withContext(Dispatchers.IO) { loadDocumentPreview(document) }
     }
     var scale by remember(document) { mutableFloatStateOf(1f) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(document.title) },
-        text = {
-            Column(Modifier.heightIn(max = 620.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Card(Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(8.dp)) {
+            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(document.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
                 Text(friendlyCategory(document.category), style = MaterialTheme.typography.labelLarge)
                 if (bitmap != null) {
-                    Box(Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 430.dp).clip(MaterialTheme.shapes.medium)) {
+                    Box(Modifier.fillMaxWidth().weight(1f).clip(MaterialTheme.shapes.medium)) {
                         androidx.compose.foundation.Image(
                             bitmap = bitmap!!.asImageBitmap(),
                             contentDescription = "Original document page. Pinch or drag to zoom.",
@@ -393,11 +401,12 @@ private fun DocumentViewerDialog(document: WorkDocument, onDismiss: () -> Unit) 
                 }
                 HorizontalDivider()
                 Text("Detected text", fontWeight = FontWeight.SemiBold)
-                Text(document.ocrText?.takeIf(String::isNotBlank) ?: "OCR text is not available yet.")
+                Column(Modifier.weight(0.65f).verticalScroll(rememberScrollState())) {
+                    Text(document.ocrText?.takeIf(String::isNotBlank) ?: "OCR text is not available yet.")
+                }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-    )
+        }
+    }
 }
 
 private fun loadDocumentPreview(document: WorkDocument): Bitmap? = runCatching {
@@ -406,7 +415,7 @@ private fun loadDocumentPreview(document: WorkDocument): Bitmap? = runCatching {
         document.mimeType == DocumentRepository.MULTI_PAGE_MIME -> ZipInputStream(file.inputStream()).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
-                if (!entry.isDirectory) return@use BitmapFactory.decodeStream(zip)
+                if (!entry.isDirectory) return@use decodeOriented(zip.readBytes())
                 entry = zip.nextEntry
             }
             null
@@ -420,9 +429,27 @@ private fun loadDocumentPreview(document: WorkDocument): Bitmap? = runCatching {
                 }
             }
         }
-        else -> BitmapFactory.decodeFile(file.absolutePath)
+        else -> decodeOriented(file.readBytes())
     }
 }.getOrNull()
+
+private fun decodeOriented(bytes: ByteArray): Bitmap? {
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+    val orientation = runCatching { ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
+        .getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    val matrix = Matrix().apply {
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
+        }
+    }
+    return if (matrix.isIdentity) bitmap else Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also {
+        if (it !== bitmap) bitmap.recycle()
+    }
+}
 
 private fun newCameraUri(context: Context): Uri {
     val file = File(context.cacheDir, "camera-captures/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }

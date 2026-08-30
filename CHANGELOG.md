@@ -2,6 +2,14 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.7 — 2026-08-29
+
+### Changed
+
+- Redesigned the Reference screen with compact searchable cards and a next-holiday summary while preserving full holiday and document access.
+- Document previews now open in a larger portrait-aware viewer with pinch zoom and OCR text.
+- Second-shift reminders default to Thursday at 12:37 when no reminder schedule has been saved.
+
 ## 0.9.6 — 2026-08-29
 
 ### Changed

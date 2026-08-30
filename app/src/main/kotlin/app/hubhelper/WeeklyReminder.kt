@@ -26,10 +26,11 @@ class ReminderPreferences(context: Context) {
     private val preferences = context.getSharedPreferences("weekly_reminder", Context.MODE_PRIVATE)
 
     fun load(shiftPreset: String? = null): ReminderPreference {
-        val shiftDefault = if (shiftPreset == "SECOND") LocalTime.of(0, 43) else LocalTime.of(14, 27)
+        val shiftDefault = if (shiftPreset == "SECOND") LocalTime.of(12, 37) else LocalTime.of(14, 27)
+        val dayDefault = if (shiftPreset == "SECOND") DayOfWeek.THURSDAY else DayOfWeek.SUNDAY
         return ReminderPreference(
         enabled = preferences.getBoolean("enabled", false),
-        dayOfWeek = runCatching { DayOfWeek.valueOf(preferences.getString("day", null) ?: "SUNDAY") }.getOrDefault(DayOfWeek.SUNDAY),
+        dayOfWeek = runCatching { DayOfWeek.valueOf(preferences.getString("day", null) ?: dayDefault.name) }.getOrDefault(dayDefault),
         time = runCatching { LocalTime.parse(preferences.getString("time", null) ?: shiftDefault.toString()) }.getOrDefault(shiftDefault),
     )
     }
