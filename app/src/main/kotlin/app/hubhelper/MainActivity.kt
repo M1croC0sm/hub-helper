@@ -10,6 +10,7 @@ import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.SideEffect
@@ -87,6 +88,7 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val appScope = rememberCoroutineScope()
+            LaunchedEffect(Unit) { attendanceRepository.removeDuplicateEvents() }
             var setupAttendancePreview by remember { mutableStateOf<SetupAttendancePreview?>(null) }
             val darkMode = themeMode.resolveDarkMode(isSystemInDarkTheme())
             SideEffect {
