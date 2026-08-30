@@ -831,10 +831,10 @@ private fun NewYearResetDialog(
                     SectionLabel("Call-ins")
                     Text("5 available for $year")
                 }
-                Text("Scan the new plant holiday calendar so upcoming holidays remain accurate.")
+                Text("Contract holidays were loaded automatically. You can scan a calendar if your company adds a special or changed holiday.")
             }
         },
-        confirmButton = { Button(onClick = onScanCalendar) { Text("SCAN HOLIDAY CALENDAR") } },
+        confirmButton = { Button(onClick = onScanCalendar) { Text("SCAN ADDITIONS") } },
         dismissButton = { TextButton(onClick = onContinue) { Text("Continue") } },
     )
 }
@@ -983,7 +983,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.9.7 • build 31", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.9.8 • build 32", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(

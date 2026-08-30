@@ -376,6 +376,8 @@ private fun DocumentViewerDialog(document: WorkDocument, onDismiss: () -> Unit) 
         value = withContext(Dispatchers.IO) { loadDocumentPreview(document) }
     }
     var scale by remember(document) { mutableFloatStateOf(1f) }
+    var offsetX by remember(document) { mutableFloatStateOf(0f) }
+    var offsetY by remember(document) { mutableFloatStateOf(0f) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(8.dp)) {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -390,8 +392,12 @@ private fun DocumentViewerDialog(document: WorkDocument, onDismiss: () -> Unit) 
                             bitmap = bitmap!!.asImageBitmap(),
                             contentDescription = "Original document page. Pinch or drag to zoom.",
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale).pointerInput(Unit) {
-                                detectTransformGestures { _, _, zoom, _ -> scale = (scale * zoom).coerceIn(1f, 5f) }
+                            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY).pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 5f)
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                }
                             },
                         )
                     }

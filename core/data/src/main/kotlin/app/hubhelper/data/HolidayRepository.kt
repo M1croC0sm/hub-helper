@@ -3,6 +3,7 @@ package app.hubhelper.data
 import android.content.Context
 import app.hubhelper.domain.PlantHoliday
 import app.hubhelper.domain.HolidayCalendarParser
+import app.hubhelper.domain.ContractHolidayCalculator
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -28,6 +29,10 @@ class HolidayRepository internal constructor(private val dao: HolidayDao) {
     suspend fun delete(holiday: PlantHoliday) {
         val id = holiday.id.toLongOrNull() ?: return
         dao.delete(HolidayEntity(id, holiday.date.toEpochDay(), holiday.name))
+    }
+
+    suspend fun ensureContractHolidays(year: Int, secondShift: Boolean) {
+        ContractHolidayCalculator.forYear(year, secondShift).forEach { add(it.date, it.name) }
     }
 
     companion object {

@@ -2,6 +2,15 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.8 — 2026-08-29
+
+### Changed
+
+- Reference documents now render with structured headings, typography, and spacing closer to a readable PDF while retaining all source text.
+- Added contract-based annual plant-holiday generation, including observed Saturday/Sunday dates and the second-shift Thursday rule for Friday holidays. Floating birthday and roving holidays remain personal and are not generated.
+- Annual PTO, sick-day, and call-in calculations continue to reset from the contract rules at the start of each calendar year; scanned calendars remain available for company-specific additions.
+- Document previews can now be dragged while zoomed.
+
 ## 0.9.7 — 2026-08-29
 
 ### Changed

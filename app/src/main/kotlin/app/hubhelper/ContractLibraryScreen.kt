@@ -199,8 +199,8 @@ private fun ReferenceReader(
             }
         }
         itemsIndexed(lines) { index, line ->
-            Text(
-                text = line.ifBlank { " " },
+            ReferenceDocumentLine(
+                line = line,
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(
@@ -214,4 +214,28 @@ private fun ReferenceReader(
             )
         }
     }
+}
+
+@Composable
+private fun ReferenceDocumentLine(line: String, modifier: Modifier, color: androidx.compose.ui.graphics.Color, fontWeight: FontWeight) {
+    val trimmed = line.trim()
+    val headingLevel = trimmed.takeWhile { it == '#' }.length
+    val display = trimmed
+        .removePrefix("### ").removePrefix("## ").removePrefix("# ")
+        .replace("**", "")
+        .replace("`", "")
+        .ifBlank { " " }
+    val style = when (headingLevel) {
+        1 -> MaterialTheme.typography.headlineSmall
+        2 -> MaterialTheme.typography.titleLarge
+        3 -> MaterialTheme.typography.titleMedium
+        else -> MaterialTheme.typography.bodyLarge
+    }
+    Text(
+        text = display,
+        modifier = modifier,
+        color = color,
+        style = style,
+        fontWeight = if (headingLevel > 0 || line.startsWith("|") || line.startsWith(">")) FontWeight.SemiBold else fontWeight,
+    )
 }

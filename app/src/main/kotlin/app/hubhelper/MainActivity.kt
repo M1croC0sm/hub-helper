@@ -88,7 +88,12 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val appScope = rememberCoroutineScope()
-            LaunchedEffect(Unit) { attendanceRepository.removeDuplicateEvents() }
+            LaunchedEffect(Unit) {
+                attendanceRepository.removeDuplicateEvents()
+                val secondShift = setupData.shiftPreset == "SECOND"
+                holidayRepository.ensureContractHolidays(LocalDate.now().year, secondShift)
+                holidayRepository.ensureContractHolidays(LocalDate.now().year + 1, secondShift)
+            }
             var setupAttendancePreview by remember { mutableStateOf<SetupAttendancePreview?>(null) }
             val darkMode = themeMode.resolveDarkMode(isSystemInDarkTheme())
             SideEffect {
