@@ -235,19 +235,10 @@ class MainActivity : FragmentActivity() {
                                 AppDataResetter.clearAll(this@MainActivity)
                                 File(filesDir, "documents").deleteRecursively()
                             }
-                            val reset = setupData.copy(
-                                ptoBalanceHours = "0",
-                                sickBalanceHours = "0",
-                                currentAttendancePoints = "0",
-                                attendanceOpeningRemainder = "0",
-                                pointsSheetUri = null,
-                                balancesAsOfDate = (overrideDate ?: LocalDate.now()).toString(),
-                                callInsRemaining = app.hubhelper.domain.ANNUAL_CALL_IN_ALLOWANCE.toString(),
-                                callInsBalanceYear = (overrideDate ?: LocalDate.now()).year.toString(),
-                            )
-                            setupPreferences.save(reset)
-                            setupData = reset
-                            Toast.makeText(this@MainActivity, "App records reset to zero.", Toast.LENGTH_LONG).show()
+                            setupPreferences.reset()
+                            setupData = SetupData()
+                            showSetup = true
+                            Toast.makeText(this@MainActivity, "All app data was deleted. Starting first-time setup.", Toast.LENGTH_LONG).show()
                         }
                     },
                     lastAcknowledgedYear = lastAcknowledgedYear,

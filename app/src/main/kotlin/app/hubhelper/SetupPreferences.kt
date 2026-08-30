@@ -69,6 +69,10 @@ class SetupPreferences(context: Context) {
         preferences.edit().putString(KEY_IMPORTED_POINTS_SHEET, uri).apply()
     }
 
+    fun reset() {
+        preferences.edit().clear().apply()
+    }
+
     private companion object {
         const val KEY_COMPLETE = "complete"
         const val KEY_PTO = "pto_balance_hours"

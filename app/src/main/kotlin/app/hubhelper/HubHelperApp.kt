@@ -983,7 +983,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.9.8 • build 32", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.9.9 • build 33", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1009,13 +1009,13 @@ private fun SettingsScreen(
     if (showResetConfirmation) {
         AlertDialog(
             onDismissRequest = { showResetConfirmation = false },
-            title = { Text("RESET APP TO ZERO?") },
-            text = { Text("This permanently removes attendance history, PTO and sick entries, call-ins, booked dates, holidays, notes, and saved documents. Current points, PTO, and sick balances will be set to zero. This cannot be undone.") },
+            title = { Text("DELETE ALL APP DATA?") },
+            text = { Text("This permanently deletes all attendance history, PTO and sick entries, call-ins, booked dates, holidays, notes, saved documents, and setup values. The app will start first-time setup again. This cannot be undone.") },
             confirmButton = {
                 Button(onClick = {
                     onResetApp()
                     showResetConfirmation = false
-                }) { Text("RESET EVERYTHING") }
+                }) { Text("DELETE AND START OVER") }
             },
             dismissButton = { TextButton(onClick = { showResetConfirmation = false }) { Text("Cancel") } },
         )
@@ -1228,7 +1228,7 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "Reminders and backup",
-            "Settings can schedule a weekly check-in, enable app lock, correct balances, set current points and call-ins, manage past points individually, and export or import a ZIP containing structured records plus original documents. Exported files are outside the app's protection, so store them securely. Reset app to zero requires confirmation, clears all records and documents, zeros current balances, and returns you to Settings.",
+            "Settings can schedule a weekly check-in, enable app lock, correct balances, set current points and call-ins, manage past points individually, and export or import a ZIP containing structured records plus original documents. Exported files are outside the app's protection, so store them securely. Delete all app data requires confirmation, clears all records and documents, and starts first-time setup again.",
         )
         ManualSection(
             "Debug date",
@@ -1242,7 +1242,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.9.8", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.9.9", style = MaterialTheme.typography.bodySmall)
     }
 }
 

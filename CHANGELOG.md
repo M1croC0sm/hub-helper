@@ -2,6 +2,13 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.9 — 2026-08-30
+
+### Changed
+
+- Reset now clearly warns that all app data will be deleted and first-time setup will restart.
+- Confirming reset clears setup preferences and opens the initial setup flow.
+
 ## 0.9.8 — 2026-08-29
 
 ### Changed
