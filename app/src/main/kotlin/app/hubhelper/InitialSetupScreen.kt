@@ -94,7 +94,7 @@ fun InitialSetupScreen(
                     .padding(horizontal = 24.dp, vertical = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text("Set up Hubb Helper", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("Set up Hub Helper", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("Add what you know now. Every item can be skipped and changed later in Settings.")
 
                 Spacer(Modifier.height(4.dp))

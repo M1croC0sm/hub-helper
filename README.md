@@ -4,7 +4,7 @@ Hub Helper is a private, offline-first Android app for tracking attendance, PTO,
 sick time, call-ins, holidays, and personal work notes. It keeps original work
 documents on the device beside searchable, OCR-derived text.
 
-> **Unofficial project:** Hubb Helper is not affiliated with or endorsed by
+> **Unofficial project:** Hub Helper is not affiliated with or endorsed by
 > Hubbell, Killark, the IBEW, or the IAM. It is not an authoritative employment
 > record and should not be the sole basis for employment decisions.
 

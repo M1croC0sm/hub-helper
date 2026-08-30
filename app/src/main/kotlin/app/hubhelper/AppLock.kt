@@ -26,7 +26,7 @@ class AppLockPreferences(context: Context) {
 }
 
 fun appLockPromptInfo(): BiometricPrompt.PromptInfo = BiometricPrompt.PromptInfo.Builder()
-    .setTitle("Unlock Hubb Helper")
+    .setTitle("Unlock Hub Helper")
     .setSubtitle("Use your fingerprint, face, or device screen lock")
     .setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
     .build()
@@ -40,7 +40,7 @@ fun AppLockedScreen(theme: HubTheme, darkMode: Boolean, onUnlock: () -> Unit) {
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Hubb Helper is locked", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Hub Helper is locked", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Button(onClick = onUnlock, modifier = Modifier.padding(top = 20.dp)) { Text("Unlock") }
             }
         }

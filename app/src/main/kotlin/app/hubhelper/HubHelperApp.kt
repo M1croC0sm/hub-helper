@@ -192,7 +192,7 @@ fun HubHelperApp(
                     TopAppBar(
                         title = {
                             val title = when (selectedArea) {
-                                MainArea.HOME -> "HUBB HELPER"
+                                MainArea.HOME -> "HUB HELPER"
                                 else -> selectedArea.label
                             }
                             Text(title, style = MaterialTheme.typography.titleLarge)
@@ -992,7 +992,7 @@ private fun SettingsScreen(
             Text("Open user manual")
         }
         OutlinedButton(
-            onClick = { exportLauncher.launch("hubb-helper-backup.zip") },
+            onClick = { exportLauncher.launch("hub-helper-backup.zip") },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Export private backup") }
         OutlinedButton(
@@ -1048,7 +1048,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.10.4 • build 38", style = MaterialTheme.typography.bodySmall)
+        Text("Hub Helper 0.11.0 • build 39", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1264,8 +1264,8 @@ private fun UserManualScreen(padding: PaddingValues) {
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         ManualSection(
-            "About Hubb Helper",
-            "Hubb Helper is a private, unofficial work reference. It is not affiliated with or endorsed by Hubbell, the IBEW, or the IAM. Original documents remain the authority.",
+            "About Hub Helper",
+            "Hub Helper is a private, unofficial work reference. It is not affiliated with or endorsed by Hubbell, the IBEW, or the IAM. Original documents remain the authority.",
         )
         ManualSection(
             "Getting started",
@@ -1307,7 +1307,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.10.4", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hub Helper 0.11.0", style = MaterialTheme.typography.bodySmall)
     }
 }
 

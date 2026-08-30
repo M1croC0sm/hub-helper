@@ -2,6 +2,17 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.11.0 — 2026-08-30
+
+### Changed
+
+- Renamed all visible application branding from Hubb Helper to Hub Helper.
+
+### Added
+
+- Added a responsive, privacy-focused product landing page prepared for Google Drive, GitHub, and future Google Play links.
+- Added an automated GitHub Pages deployment workflow.
+
 ## 0.10.4 — 2026-08-30
 
 ### Fixed

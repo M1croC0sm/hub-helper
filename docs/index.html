@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11171a">
+  <meta name="description" content="Hub Helper is a private, offline-first Android work companion for attendance, time, documents, plant holidays, and paydays.">
+  <title>Hub Helper — Private, offline work companion</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Hub Helper home">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>HUB HELPER</span>
+    </a>
+    <a class="header-link" href="#privacy">Privacy</a>
+  </header>
+
+  <main id="top">
+    <section class="hero section-shell">
+      <div class="hero-copy">
+        <p class="eyebrow">PRIVATE · OFFLINE · EMPLOYEE-CREATED</p>
+        <h1>A clearer way to keep your work information together.</h1>
+        <p class="lead">Hub Helper organizes attendance, PTO, sick time, plant holidays, paydays, and original work documents without accounts, advertising, analytics, or cloud storage.</p>
+        <div class="actions">
+          <a class="button primary disabled" id="drive-download" href="#download" aria-disabled="true">Google Drive link coming soon</a>
+          <a class="button secondary" href="https://github.com/M1croC0sm/hub-helper">View source on GitHub</a>
+        </div>
+        <p class="build-line">Android 8.0+ <span>·</span> Version 0.11.0 <span>·</span> Build 39</p>
+      </div>
+
+      <div class="phone" aria-label="Preview of the Hub Helper home screen">
+        <div class="phone-top"><span>HUB HELPER</span><span>⚙</span></div>
+        <div class="preview-panel attendance">
+          <span class="preview-label">ATTENDANCE</span>
+          <div class="metric"><strong>3.5</strong><span>POINTS</span></div>
+          <div class="status">● LOW RISK</div>
+        </div>
+        <div class="preview-row">
+          <div class="preview-panel"><span class="preview-label blue">PTO HOURS</span><strong>42.0</strong></div>
+          <div class="preview-panel"><span class="preview-label teal">SICK HOURS</span><strong>8.0</strong></div>
+        </div>
+        <div class="preview-row">
+          <div class="preview-panel"><span class="preview-label">CALL-INS</span><strong>5</strong><small>LEFT</small></div>
+          <div class="preview-panel"><span class="preview-label muted">NEXT PAYDAY</span><strong class="date">SEP 11, 26</strong><small>FRIDAY</small></div>
+        </div>
+        <div class="preview-panel holiday"><span class="preview-label">NEXT PLANT HOLIDAY</span><strong>LABOR DAY</strong><span>SEP 7</span></div>
+      </div>
+    </section>
+
+    <section class="trust section-shell" aria-label="Privacy highlights">
+      <article><span>✓</span><h2>Offline-first</h2><p>Your records stay in private app storage.</p></article>
+      <article><span>✓</span><h2>No account</h2><p>Start using the app without signing in.</p></article>
+      <article><span>✓</span><h2>No tracking</h2><p>No advertising, analytics, or background uploads.</p></article>
+      <article><span>✓</span><h2>Explainable</h2><p>See the records behind calculated values.</p></article>
+    </section>
+
+    <section class="features section-shell">
+      <div class="section-heading">
+        <p class="eyebrow">BUILT FOR EVERYDAY USE</p>
+        <h2>The important details, without the clutter.</h2>
+      </div>
+      <div class="feature-grid">
+        <article><span>01</span><h3>Attendance</h3><p>Track dated point events, falloffs, and confirmed attendance credits.</p></article>
+        <article><span>02</span><h3>Time</h3><p>Keep PTO, sick time, call-ins, floating days, and booked vacation visible.</p></article>
+        <article><span>03</span><h3>Calendar</h3><p>See plant holidays, paydays, attendance events, and time off together.</p></article>
+        <article><span>04</span><h3>Documents</h3><p>Save original pages, review on-device OCR, zoom, and drag for reference.</p></article>
+      </div>
+    </section>
+
+    <section class="release section-shell" id="download">
+      <div>
+        <p class="eyebrow">CURRENT TEST BUILD</p>
+        <h2>Hub Helper 0.11.0</h2>
+        <p>Build 39 · Updated August 30, 2026</p>
+      </div>
+      <div class="release-notes">
+        <h3>Before installing</h3>
+        <ol>
+          <li>Download <strong>Hub Helper.apk</strong> from the Google Drive button.</li>
+          <li>Allow installation from your browser or file manager if Android asks.</li>
+          <li>Open Hub Helper and complete the private on-device setup.</li>
+        </ol>
+        <div class="checksum">
+          <span>SHA-256</span>
+          <code id="checksum">a50973decb20f04d29267bbd11915f2f1e79d83c98171d7dda9e7d0ddb782b2b</code>
+          <button type="button" id="copy-checksum">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="privacy section-shell" id="privacy">
+      <div>
+        <p class="eyebrow">TRUST & TRANSPARENCY</p>
+        <h2>Designed to keep personal work information personal.</h2>
+      </div>
+      <div>
+        <p>Hub Helper does not request Android Internet permission. OCR and calculations run on the device. Backups happen only when the user explicitly exports one.</p>
+        <div class="text-links">
+          <a href="https://github.com/M1croC0sm/hub-helper/blob/main/PRIVACY.md">Privacy policy</a>
+          <a href="https://github.com/M1croC0sm/hub-helper/blob/main/SECURITY.md">Security policy</a>
+          <a href="https://github.com/M1croC0sm/hub-helper/blob/main/NOTICE.md">Notices</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Hub Helper</span>
+    <p>Unofficial employee-created tool. Not affiliated with or endorsed by Hubbell, Killark, IBEW, or IAM. Original records and authorized policies remain authoritative.</p>
+  </footer>
+  <script src="site.js"></script>
+</body>
+</html>

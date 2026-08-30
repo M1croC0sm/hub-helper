@@ -74,7 +74,7 @@ object WeeklyReminderScheduler {
             1001,
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_popup_reminder)
-                .setContentTitle("Hubb Helper")
+                .setContentTitle("Hub Helper")
                 .setContentText("Anything from this workweek to log?")
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 .setContentIntent(pendingIntent)

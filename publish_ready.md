@@ -125,8 +125,9 @@ application public:
 
 ### 3. Name, branding, and affiliation need a final decision
 
-The project currently uses both `Hub Helper` and `Hubb Helper`. Choose one final
-name before creating a store listing or signing a public release.
+The project now consistently uses `Hub Helper`. The earlier review found both
+`Hub Helper` and `Hubb Helper`; that naming issue has been resolved before
+creating a store listing or signing a public release.
 
 Also confirm:
 
@@ -330,7 +331,7 @@ not only the application's intended architecture.
 
 Before the first upload:
 
-- Choose `Hub Helper` or `Hubb Helper` consistently.
+- Keep the selected `Hub Helper` product name consistent.
 - Finalize the application/package ID.
 - Select the launcher icon and developer name.
 - Choose the default language, application category, free/paid status, and
@@ -547,10 +548,9 @@ Record major release decisions here as they are made.
 
 | Date | Decision | Rationale/evidence | Owner |
 |---|---|---|---|
-| Pending | Final product name | Choose Hub Helper or Hubb Helper | Pending |
+| Complete | Final product name | Hub Helper selected consistently | Complete |
 | Pending | Final package ID | Must be settled before first Play upload | Pending |
 | Pending | Publisher/account type | Personal or authorized organization | Pending |
 | Pending | Reference-document distribution | Written permission or removal | Pending |
 | Pending | ML Kit/network position | Accurate disclosure or enforced no-network build | Pending |
 | Pending | Software license | Depends on ownership and open-source decision | Pending |
-
