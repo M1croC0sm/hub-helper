@@ -2,6 +2,12 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.10.0 — 2026-08-30
+
+### Fixed
+
+- Contract holidays now appear immediately from the calculated calendar, even before persistence finishes or when setup selects a shift.
+
 ## 0.9.9 — 2026-08-30
 
 ### Changed

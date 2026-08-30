@@ -35,6 +35,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,8 @@ import app.hubhelper.data.WorkNoteRepository
 import app.hubhelper.data.HolidayRepository
 import app.hubhelper.data.CallInRepository
 import app.hubhelper.data.BookedPtoRepository
+import app.hubhelper.domain.ContractHolidayCalculator
+import app.hubhelper.domain.PlantHoliday
 import app.hubhelper.domain.AttendanceCalculator
 import app.hubhelper.domain.TimeOffCalculator
 import app.hubhelper.domain.ParsedAttendanceStatement
@@ -137,10 +140,24 @@ fun HubHelperApp(
     val timeAdjustments by timeBalanceRepository.adjustments.collectAsState(initial = emptyList())
     val documents by documentRepository.documents.collectAsState(initial = emptyList())
     val workNotes by workNoteRepository.notes.collectAsState(initial = emptyList())
-    val holidays by holidayRepository.holidays.collectAsState(initial = emptyList())
+    val storedHolidays by holidayRepository.holidays.collectAsState(initial = emptyList())
+    val holidays = remember(storedHolidays, setupData.shiftPreset, appDate.year) {
+        val secondShift = setupData.shiftPreset == "SECOND"
+        val generated = (appDate.year..(appDate.year + 1)).flatMap { year ->
+            ContractHolidayCalculator.forYear(year, secondShift).map { holiday ->
+                PlantHoliday("contract-${holiday.date}-${holiday.name}", holiday.date, holiday.name)
+            }
+        }
+        (storedHolidays + generated).distinctBy { it.date to it.name.lowercase() }.sortedBy { it.date }
+    }
     val callIns by callInRepository.events.collectAsState(initial = emptyList())
     val bookedPtoDays by bookedPtoRepository.days.collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
+    LaunchedEffect(setupData.shiftPreset, appDate.year) {
+        val secondShift = setupData.shiftPreset == "SECOND"
+        holidayRepository.ensureContractHolidays(appDate.year, secondShift)
+        holidayRepository.ensureContractHolidays(appDate.year + 1, secondShift)
+    }
     fun callInsRemainingFor(year: Int): Int {
         val saved = setupData.callInsRemaining.toIntOrNull()
         return if (setupData.callInsBalanceYear.toIntOrNull() == year && saved != null) {
@@ -983,7 +1000,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.9.9 • build 33", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.10.0 • build 34", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1242,7 +1259,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.9.9", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.10.0", style = MaterialTheme.typography.bodySmall)
     }
 }
 
