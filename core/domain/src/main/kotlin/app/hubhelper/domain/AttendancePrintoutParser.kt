@@ -17,6 +17,7 @@ data class ParsedAttendanceStatement(
 
 /** Parses both row-oriented OCR and OCR that reads table columns separately. */
 class AttendancePrintoutParser {
+    private val pageMarker = Regex("---\\s*Page\\s+\\d+\\s*---", RegexOption.IGNORE_CASE)
     private val datePattern = Regex("""(\d{1,2}\s*[-/.]\s*\d{1,2}\s*[-/.]\s*\d{2,4})""")
     private val number = Regex("""(?<![\d.-])-?(?:\d+(?:\.\d+)?|\.\d+)""")
     private val standaloneNumber = Regex("""^\s*-?(?:\d+(?:\.\d+)?|\.\d+)\s*$""")
@@ -28,16 +29,36 @@ class AttendancePrintoutParser {
 
     fun parse(text: String): ParsedAttendanceStatement {
         val warnings = mutableListOf<String>()
-        val normalizedLines = text.lineSequence().map(::normalize).filter(String::isNotBlank).toList()
-        val tableStart = normalizedLines.indexOfFirst { line ->
+        val hasPageMarkers = text.lineSequence().any { pageMarker.matches(it.trim()) }
+        val rawPages = mutableListOf<MutableList<String>>()
+        var currentPage = mutableListOf<String>()
+        text.lineSequence().forEach { rawLine ->
+            if (pageMarker.matches(rawLine.trim())) {
+                if (currentPage.isNotEmpty()) rawPages += currentPage
+                currentPage = mutableListOf()
+            } else {
+                currentPage += rawLine
+            }
+        }
+        if (currentPage.isNotEmpty()) rawPages += currentPage
+        if (rawPages.isEmpty()) rawPages += mutableListOf(text)
+        val normalizedPages = rawPages.map { page -> page.map(::normalize).filter(String::isNotBlank) }
+        val tablePage = normalizedPages.indexOfFirst { page -> page.any { line ->
             line.contains("point history", ignoreCase = true) ||
                 (line.contains("date", ignoreCase = true) && line.contains("point", ignoreCase = true))
-        }
-        if (tableStart < 0) {
+        } }
+        if (tablePage < 0) {
             return ParsedAttendanceStatement(emptyList(), null, listOf("Attendance table header was not recognized; no rows were imported"))
         }
-        val lines = normalizedLines.drop(tableStart + 1)
-            .takeWhile { line -> !isTableFooter(line) }
+        val lines = normalizedPages.drop(tablePage).flatMapIndexed { pageIndex, page ->
+            val start = if (pageIndex == 0) {
+                page.indexOfFirst { line ->
+                    line.contains("point history", ignoreCase = true) ||
+                        (line.contains("date", ignoreCase = true) && line.contains("point", ignoreCase = true))
+                }.plus(1)
+            } else 0
+            page.drop(start).takeWhile { line -> !isTableFooter(line) }
+        }
         val inlineRows = lines.mapNotNull(::parseInlineRow)
         val allDates = lines.filter(::looksLikeAttendanceRow).mapNotNull { line ->
             datePattern.find(line)?.groupValues?.get(1)?.let(::parseDate)
@@ -52,7 +73,11 @@ class AttendancePrintoutParser {
             parseSeparatedColumns(lines, allDates, standaloneTotals, warnings)
         }
         if (rows.isEmpty()) warnings += "No complete dated rows were recognized"
-        val currentTotal = standaloneTotals.lastOrNull() ?: rows.lastOrNull()?.runningTotalHalfPoints
+        val currentTotal = if (hasPageMarkers) {
+            rows.lastOrNull()?.runningTotalHalfPoints ?: standaloneTotals.lastOrNull()
+        } else {
+            standaloneTotals.lastOrNull() ?: rows.lastOrNull()?.runningTotalHalfPoints
+        }
         if (rows.any { it.adjustmentHalfPoints == null }) warnings += "Some row changes need manual review"
         return ParsedAttendanceStatement(rows, currentTotal, warnings.distinct())
     }

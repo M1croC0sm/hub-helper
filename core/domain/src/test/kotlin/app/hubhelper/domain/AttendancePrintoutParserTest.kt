@@ -100,4 +100,25 @@ class AttendancePrintoutParserTest {
         assertEquals(1, result.rows.size)
         assertEquals("2026-08-03", result.rows.single().date.toString())
     }
+
+    @Test
+    fun `continues after signatures at the bottom of the first page`() {
+        val text = """
+            --- Page 1 ---
+            Point History
+            Date Comment Points to Date
+            8-01-26 1pt Absent 1.0
+            1.0
+            Employee Signature
+            --- Page 2 ---
+            8-02-26 Absent 2.0
+            2.0
+        """.trimIndent()
+
+        val result = AttendancePrintoutParser().parse(text)
+
+        assertEquals(2, result.rows.size)
+        assertEquals("2026-08-02", result.rows.last().date.toString())
+        assertEquals(4, result.currentTotalHalfPoints)
+    }
 }

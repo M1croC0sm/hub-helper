@@ -960,7 +960,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.9.2 • build 26", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.9.3 • build 27", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1219,7 +1219,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.9.2", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.9.3", style = MaterialTheme.typography.bodySmall)
     }
 }
 

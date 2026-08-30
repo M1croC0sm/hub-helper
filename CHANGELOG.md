@@ -2,6 +2,13 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.3 — 2026-08-29
+
+### Fixed
+
+- Multi-page attendance imports now continue past the first page’s signature footer and use the final page’s running total.
+- Added regression coverage for signature blocks at the bottom of page one.
+
 ## 0.9.2 — 2026-08-29
 
 ### Changed
