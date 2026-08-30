@@ -86,6 +86,7 @@ private enum class MarkerType(
     PTO("PTO", "☺", CalendarFilter.PTO),
     HOLIDAY("Holiday", "★", CalendarFilter.HOLIDAY),
     CORRECTION("Correction", "±", CalendarFilter.ALL),
+    PAYDAY("Payday", "$", CalendarFilter.ALL),
 }
 
 private sealed interface MarkerSource {
@@ -117,6 +118,7 @@ private val legendEntries = listOf(
     LegendEntry(MarkerType.SICK, "Sick"),
     LegendEntry(MarkerType.PTO, "PTO"),
     LegendEntry(MarkerType.HOLIDAY, "Holiday"),
+    LegendEntry(MarkerType.PAYDAY, "Payday"),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,6 +132,7 @@ fun CalendarScreen(
     callIns: List<CallInEvent>,
     bookedPtoDays: List<BookedPtoDay>,
     holidays: List<PlantHoliday>,
+    paydays: List<LocalDate> = emptyList(),
     request: CalendarRequest,
     onLogDate: (LocalDate) -> Unit,
     onUpdateAttendance: (AttendanceEvent) -> Unit,
@@ -145,8 +148,8 @@ fun CalendarScreen(
     var selectedDay by remember(request) { mutableStateOf<LocalDate?>(null) }
     var editAttendance by remember { mutableStateOf<AttendanceEvent?>(null) }
     var deleteMarker by remember { mutableStateOf<CalendarMarker?>(null) }
-    val allMarkers = remember(events, timeAdjustments, callIns, bookedPtoDays, holidays, appDate) {
-        buildCalendarMarkers(events, timeAdjustments, callIns, bookedPtoDays, holidays, appDate)
+    val allMarkers = remember(events, timeAdjustments, callIns, bookedPtoDays, holidays, paydays, appDate) {
+        buildCalendarMarkers(events, timeAdjustments, callIns, bookedPtoDays, holidays, paydays, appDate)
     }
     val filteredMarkers = remember(allMarkers, filter) {
         if (filter == CalendarFilter.ALL) allMarkers
@@ -464,6 +467,7 @@ private fun markerColor(type: MarkerType): Color = when (type) {
     MarkerType.SICK -> MaterialTheme.colorScheme.onSurface
     MarkerType.PTO -> HubThemeDesign.tokens.good
     MarkerType.CORRECTION -> HubThemeDesign.tokens.pto
+    MarkerType.PAYDAY -> MaterialTheme.colorScheme.primary
 }
 
 @Composable
@@ -518,6 +522,7 @@ private fun buildCalendarMarkers(
     callIns: List<CallInEvent>,
     bookedPto: List<BookedPtoDay>,
     holidays: List<PlantHoliday>,
+    paydays: List<LocalDate>,
     appDate: LocalDate,
 ): List<CalendarMarker> {
     val calculator = AttendanceCalculator()
@@ -594,6 +599,9 @@ private fun buildCalendarMarkers(
             holiday.name, "Plant holiday", MarkerSource.Holiday(holiday),
         )
     }
+    paydays.forEach { date ->
+        markers += CalendarMarker("payday-$date", date, MarkerType.PAYDAY, "Payday", "Biweekly payday", MarkerSource.Derived)
+    }
     return markers.distinctBy { it.id }.sortedWith(compareBy({ it.date }, { markerPriority(it.type) }))
 }
 
@@ -607,6 +615,7 @@ private fun markerPriority(type: MarkerType): Int = when (type) {
     MarkerType.PTO -> 6
     MarkerType.HOLIDAY -> 7
     MarkerType.CORRECTION -> 8
+    MarkerType.PAYDAY -> 9
 }
 
 private fun markerPointsHalf(marker: CalendarMarker): Int =

@@ -16,6 +16,7 @@ data class SetupData(
     val callInsBalanceYear: String = "",
     val birthdayMonth: String = "",
     val floatingHolidayAllowance: String = "",
+    val paydayAnchor: String = "",
 )
 
 class SetupPreferences(context: Context) {
@@ -41,6 +42,7 @@ class SetupPreferences(context: Context) {
         callInsBalanceYear = preferences.getString(KEY_CALL_INS_YEAR, "").orEmpty(),
         birthdayMonth = preferences.getString(KEY_BIRTHDAY_MONTH, "").orEmpty(),
         floatingHolidayAllowance = storedFloatingAllowance ?: if (isComplete) "2" else "",
+        paydayAnchor = preferences.getString(KEY_PAYDAY_ANCHOR, "").orEmpty(),
         )
     }
 
@@ -58,6 +60,7 @@ class SetupPreferences(context: Context) {
             .putString(KEY_CALL_INS_YEAR, data.callInsBalanceYear)
             .putString(KEY_BIRTHDAY_MONTH, data.birthdayMonth)
             .putString(KEY_FLOATING_ALLOWANCE, data.floatingHolidayAllowance)
+            .putString(KEY_PAYDAY_ANCHOR, data.paydayAnchor)
             .putBoolean(KEY_COMPLETE, true)
             .apply()
     }
@@ -88,5 +91,6 @@ class SetupPreferences(context: Context) {
         const val KEY_CALL_INS_YEAR = "call_ins_balance_year"
         const val KEY_BIRTHDAY_MONTH = "birthday_month"
         const val KEY_FLOATING_ALLOWANCE = "floating_holiday_allowance"
+        const val KEY_PAYDAY_ANCHOR = "payday_anchor"
     }
 }

@@ -65,6 +65,8 @@ import app.hubhelper.domain.ParsedAttendanceStatement
 import app.hubhelper.domain.WorkDocument
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.pm.PackageManager
@@ -79,7 +81,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
-import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
@@ -153,6 +154,11 @@ fun HubHelperApp(
     val callIns by callInRepository.events.collectAsState(initial = emptyList())
     val bookedPtoDays by bookedPtoRepository.days.collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
+    val paydays = remember(setupData.paydayAnchor, appDate.year) {
+        runCatching { LocalDate.parse(setupData.paydayAnchor) }
+            .map { app.hubhelper.domain.PaydayCalculator.everyOtherFriday(it, LocalDate.of(appDate.year, 12, 31)) }
+            .getOrDefault(emptyList())
+    }
     LaunchedEffect(setupData.shiftPreset, appDate.year) {
         val secondShift = setupData.shiftPreset == "SECOND"
         holidayRepository.ensureContractHolidays(appDate.year, secondShift)
@@ -228,6 +234,7 @@ fun HubHelperApp(
                         callInsRemaining = callInsRemainingFor(appDate.year),
                         bookedPtoDays,
                         holidays = holidays,
+                        paydays = paydays,
                         workNotes = workNotes,
                         onViewAttendanceDetails = { selectedArea = MainArea.ATTENDANCE_DETAILS },
                         onViewCalendar = { request ->
@@ -245,6 +252,7 @@ fun HubHelperApp(
                         callIns = callIns,
                         bookedPtoDays = bookedPtoDays,
                         holidays = holidays,
+                        paydays = paydays,
                         request = calendarRequest,
                         onLogDate = { date -> logDate = date; showGlobalLog = true },
                         onUpdateAttendance = { updated ->
@@ -564,6 +572,7 @@ private fun HomeScreen(
     callInsRemaining: Int,
     bookedPtoDays: List<app.hubhelper.domain.BookedPtoDay>,
     holidays: List<app.hubhelper.domain.PlantHoliday>,
+    paydays: List<LocalDate>,
     workNotes: List<app.hubhelper.domain.WorkNote>,
     onViewAttendanceDetails: () -> Unit,
     onViewCalendar: (CalendarRequest) -> Unit,
@@ -702,8 +711,25 @@ private fun HomeScreen(
                 footer = "opening ${setupData.sickBalanceHours.ifBlank { "0" }} hrs",
             )
         }
-        CallInPanel(callInsRemaining, Modifier.fillMaxWidth()) {
-            onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.CALL_IN))
+        val nextPayday = paydays.firstOrNull { !it.isBefore(appDate) }
+        if (!largeFont && nextPayday != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
+                CallInPanel(callInsRemaining, Modifier.weight(1f)) {
+                    onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.CALL_IN))
+                }
+                HubPanel(Modifier.weight(1f).clickable { onViewCalendar(CalendarRequest(YearMonth.from(nextPayday))) }, accent = MaterialTheme.colorScheme.primary) {
+                    SectionLabel("Next payday", color = MaterialTheme.colorScheme.primary)
+                    MetricValue(nextPayday.monthDayYear(), "FRIDAY", MaterialTheme.colorScheme.primary)
+                }
+            }
+        } else {
+            CallInPanel(callInsRemaining, Modifier.fillMaxWidth()) { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.CALL_IN)) }
+            nextPayday?.let { date ->
+                HubPanel(Modifier.fillMaxWidth().clickable { onViewCalendar(CalendarRequest(YearMonth.from(date))) }, accent = MaterialTheme.colorScheme.primary) {
+                    SectionLabel("Next payday", color = MaterialTheme.colorScheme.primary)
+                    MetricValue(date.monthDayYear(), "FRIDAY", MaterialTheme.colorScheme.primary)
+                }
+            }
         }
 
         HubPanel(Modifier.fillMaxWidth()) {
@@ -936,7 +962,7 @@ private fun SettingsScreen(
             Text(if (appLockEnabled) "App lock enabled" else "App lock disabled")
         }
         OutlinedButton(onClick = onEditSetup, modifier = Modifier.fillMaxWidth()) {
-            Text("Edit hire date, shift, and starting balances")
+            Text("Edit hire date, shift, balances, and payday")
         }
         BalanceCorrectionTools(onAddBalanceCorrection, onSetAttendancePoints, onSetCallIns)
         PastPointsTools(appDate, attendanceEvents, onAddPastPoint, onUpdatePastPoint, onDeletePastPoint)
@@ -1000,7 +1026,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.10.0 • build 34", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.10.1 • build 35", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(

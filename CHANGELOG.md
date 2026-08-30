@@ -2,6 +2,14 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.10.1 — 2026-08-30
+
+### Added
+
+- Setup now accepts one of the next two Fridays as a confirmed payday anchor and calculates every other Friday through year end.
+- Paydays appear as calendar markers and in a Home tile beside Call-ins.
+- The payday anchor can be changed by editing setup from Settings.
+
 ## 0.10.0 — 2026-08-30
 
 ### Fixed

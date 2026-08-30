@@ -36,6 +36,8 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.time.LocalDate
 import java.time.Month
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
 import java.util.UUID
 
 @Composable
@@ -59,6 +61,7 @@ fun InitialSetupScreen(
     var hireDate by remember(initialData) { mutableStateOf(runCatching { LocalDate.parse(initialData.hireDate) }.getOrNull()) }
     var birthdayMonth by remember(initialData) { mutableStateOf(initialData.birthdayMonth.toIntOrNull()) }
     var floatingHolidayAllowance by remember(initialData) { mutableStateOf(initialData.floatingHolidayAllowance) }
+    var paydayAnchor by remember(initialData) { mutableStateOf(initialData.paydayAnchor) }
     var cameraUri by remember { mutableStateOf(newSetupCameraUri(context)) }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         if (saved) pointsSheetUris = pointsSheetUris + cameraUri.toString()
@@ -137,6 +140,14 @@ fun InitialSetupScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Text("Next payday", style = MaterialTheme.typography.titleMedium)
+                Text("Choose one of the next two Fridays. The app will calculate every other Friday through the end of the year.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val firstFriday = LocalDate.now().with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
+                    listOf(firstFriday, firstFriday.plusWeeks(1)).forEach { date ->
+                        FilterChip(selected = paydayAnchor == date.toString(), onClick = { paydayAnchor = date.toString() }, label = { Text(date.monthDayYear()) })
+                    }
+                }
                 OutlinedTextField(
                     value = callInsRemaining,
                     onValueChange = { callInsRemaining = it.filter(Char::isDigit).take(1) },
@@ -207,6 +218,7 @@ fun InitialSetupScreen(
                                 callInsBalanceYear = if (callInsRemaining.isBlank()) "" else LocalDate.now().year.toString(),
                                 birthdayMonth = birthdayMonth?.toString().orEmpty(),
                                 floatingHolidayAllowance = floatingHolidayAllowance.trim(),
+                                paydayAnchor = paydayAnchor,
                             ),
                         )
                     },
