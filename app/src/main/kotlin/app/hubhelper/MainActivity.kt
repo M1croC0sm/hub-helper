@@ -24,6 +24,7 @@ import app.hubhelper.domain.DocumentCategory
 import app.hubhelper.domain.AttendanceEventStatus
 import app.hubhelper.domain.AttendanceEventType
 import app.hubhelper.domain.AttendancePrintoutParser
+import app.hubhelper.domain.AttendanceCalculator
 import app.hubhelper.domain.HalfPoints
 import app.hubhelper.domain.ParsedAttendanceStatement
 import android.net.Uri
@@ -320,6 +321,19 @@ private suspend fun applyAttendanceStatement(
         ?.multiply(java.math.BigDecimal(2))
         ?.toInt()
         ?: 0
+    val sheetTotal = parsed.currentTotalHalfPoints
+    if (sheetTotal != null) {
+        val datedPoints = AttendanceCalculator().summarize(repository.allEvents(), calculationDate).confirmedPoints.value
+        val reconciledOpening = sheetTotal - datedPoints
+        return AttendanceImportResult(
+            setup = setup.copy(
+                currentAttendancePoints = HalfPoints(sheetTotal).asDisplayValue(),
+                attendanceOpeningRemainder = displayHalfPoints(reconciledOpening),
+            ),
+            addedCount = addedCount,
+            skippedCount = usableRows.size - addedCount,
+        )
+    }
     return AttendanceImportResult(
         setup = setup.copy(attendanceOpeningRemainder = displayHalfPoints(openingHalfPoints - importedActiveTotal)),
         addedCount = addedCount,

@@ -12,6 +12,9 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_events ORDER BY occurredEpochDay DESC, id DESC")
     fun observeAll(): Flow<List<AttendanceEventEntity>>
 
+    @Query("SELECT * FROM attendance_events ORDER BY occurredEpochDay DESC, id DESC")
+    suspend fun getAll(): List<AttendanceEventEntity>
+
     @Query("SELECT COUNT(*) FROM attendance_events WHERE sourceDocumentId = :documentId")
     suspend fun countBySourceDocument(documentId: String): Int
 

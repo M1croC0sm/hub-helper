@@ -58,6 +58,7 @@ fun InitialSetupScreen(
     }
     var hireDate by remember(initialData) { mutableStateOf(runCatching { LocalDate.parse(initialData.hireDate) }.getOrNull()) }
     var birthdayMonth by remember(initialData) { mutableStateOf(initialData.birthdayMonth.toIntOrNull()) }
+    var floatingHolidayAllowance by remember(initialData) { mutableStateOf(initialData.floatingHolidayAllowance) }
     var cameraUri by remember { mutableStateOf(newSetupCameraUri(context)) }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         if (saved) pointsSheetUris = pointsSheetUris + cameraUri.toString()
@@ -79,6 +80,7 @@ fun InitialSetupScreen(
         it >= (-1).toBigDecimal() && it.remainder("0.5".toBigDecimal()).signum() == 0
     } == true
     val callInsValid = callInsRemaining.isBlank() || callInsRemaining.toIntOrNull() in 0..5
+    val floatingAllowanceValid = floatingHolidayAllowance.isBlank() || floatingHolidayAllowance.toIntOrNull() in 0..10
 
     HubHelperTheme(theme, darkMode) {
         Surface(modifier = Modifier.fillMaxSize()) {
@@ -124,6 +126,17 @@ fun InitialSetupScreen(
                 }
                 BalanceField("Current PTO balance (hours)", ptoBalance, ptoValid) { ptoBalance = it }
                 BalanceField("Current sick balance (days)", sickBalance, sickValid) { sickBalance = it }
+                OutlinedTextField(
+                    value = floatingHolidayAllowance,
+                    onValueChange = { floatingHolidayAllowance = it.filter(Char::isDigit).take(2) },
+                    label = { Text("Floating vacation days available") },
+                    placeholder = { Text("Example: 2") },
+                    supportingText = { Text("Enter 0 to 10; leave blank if unknown") },
+                    isError = !floatingAllowanceValid,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 OutlinedTextField(
                     value = callInsRemaining,
                     onValueChange = { callInsRemaining = it.filter(Char::isDigit).take(1) },
@@ -193,10 +206,11 @@ fun InitialSetupScreen(
                                 callInsRemaining = callInsRemaining.trim(),
                                 callInsBalanceYear = if (callInsRemaining.isBlank()) "" else LocalDate.now().year.toString(),
                                 birthdayMonth = birthdayMonth?.toString().orEmpty(),
+                                floatingHolidayAllowance = floatingHolidayAllowance.trim(),
                             ),
                         )
                     },
-                    enabled = ptoValid && sickValid && pointsValid && callInsValid,
+                    enabled = ptoValid && sickValid && pointsValid && callInsValid && floatingAllowanceValid,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Finish setup") }
 

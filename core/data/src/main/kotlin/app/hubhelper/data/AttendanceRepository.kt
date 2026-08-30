@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.map
 class AttendanceRepository internal constructor(private val dao: AttendanceDao) {
     val events: Flow<List<AttendanceEvent>> = dao.observeAll().map { rows -> rows.map(AttendanceEventEntity::toDomain) }
 
+    suspend fun allEvents(): List<AttendanceEvent> = dao.getAll().map(AttendanceEventEntity::toDomain)
+
     suspend fun hasSourceDocument(documentId: String): Boolean = dao.countBySourceDocument(documentId) > 0
 
     suspend fun add(

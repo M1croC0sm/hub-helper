@@ -653,7 +653,9 @@ private fun HomeScreen(
 
         val ptoWarningAt = if (setupData.shiftPreset == "SECOND") 10 else 8
         val ptoColor = if (TimeOffCalculator.isAtOrBelowOnePtoDay(ptoBalance, ptoWarningAt)) design.attention else design.pto
-        val floatingRemaining = app.hubhelper.domain.remainingFloatingHolidays(timeAdjustments, bookedPtoDays, appDate)
+        val floatingRemaining = app.hubhelper.domain.remainingFloatingHolidays(
+            timeAdjustments, bookedPtoDays, appDate, setupData.floatingHolidayAllowance.toIntOrNull() ?: 0,
+        )
         if (!largeFont) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
             BalancePanel(
                 "PTO hours", ptoBalance, "HRS", ptoColor, Modifier.weight(1f),
@@ -958,7 +960,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.9.1 • build 25", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.9.2 • build 26", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1191,7 +1193,7 @@ private fun UserManualScreen(padding: PaddingValues) {
         )
         ManualSection(
             "PTO, sick time, holidays, and notes",
-            "Opening balances come from setup. Use LOG to record full-day, half-day, or custom PTO, sick time, call-ins, floating holidays, and booked vacation. Sick time is shown as days; one sick day is eight hours. You receive five call-ins each calendar year. Logging one deducts eight PTO hours on first shift or ten on second shift. A regular booked vacation deducts the shift-day amount when its date arrives and is not deducted twice if it was also recorded manually. The two personal floating holidays are tracked separately and are never listed as dated plant holidays. Reviewed plant holidays also appear in Reference.",
+            "Opening balances come from setup. Use LOG to record full-day, half-day, or custom PTO, sick time, call-ins, floating holidays, and booked vacation. Sick time is shown as days; one sick day is eight hours. You receive five call-ins each calendar year. Logging one deducts eight PTO hours on first shift or ten on second shift. A regular booked vacation deducts the shift-day amount when its date arrives and is not deducted twice if it was also recorded manually. Setup asks how many floating vacation days are available; those personal days are tracked separately and are never listed as dated plant holidays. Reviewed plant holidays also appear in Reference.",
         )
         ManualSection(
             "Calendar",
@@ -1217,7 +1219,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.9.1", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.9.2", style = MaterialTheme.typography.bodySmall)
     }
 }
 

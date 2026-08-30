@@ -44,6 +44,7 @@ object BackupExporter {
                 put("callInsRemaining", setup.callInsRemaining)
                 put("callInsBalanceYear", setup.callInsBalanceYear)
                 put("birthdayMonth", setup.birthdayMonth)
+                put("floatingHolidayAllowance", setup.floatingHolidayAllowance)
             })
             put("attendanceEvents", JSONArray(events.map { event ->
                 JSONObject().apply {

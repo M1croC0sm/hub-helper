@@ -18,6 +18,7 @@ fun remainingFloatingHolidays(
     adjustments: List<TimeBalanceAdjustment>,
     bookedDays: List<BookedPtoDay>,
     asOf: LocalDate,
+    allowance: Int = 2,
 ): Int {
     val used = buildSet {
         adjustments.filter { it.occurredOn.year == asOf.year && !it.occurredOn.isAfter(asOf) && it.minutes < 0 }.forEach {
@@ -31,7 +32,7 @@ fun remainingFloatingHolidays(
             if (it.type != BookedTimeType.REGULAR_PTO) add(it.type)
         }
     }
-    return (2 - used.size).coerceAtLeast(0)
+    return (allowance - used.size).coerceAtLeast(0)
 }
 
 fun floatingHolidayAvailable(

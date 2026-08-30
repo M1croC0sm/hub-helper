@@ -15,6 +15,7 @@ data class SetupData(
     val callInsRemaining: String = "",
     val callInsBalanceYear: String = "",
     val birthdayMonth: String = "",
+    val floatingHolidayAllowance: String = "",
 )
 
 class SetupPreferences(context: Context) {
@@ -25,6 +26,7 @@ class SetupPreferences(context: Context) {
 
     fun load(): SetupData {
         val currentPoints = preferences.getString(KEY_CURRENT_POINTS, "").orEmpty()
+        val storedFloatingAllowance = preferences.getString(KEY_FLOATING_ALLOWANCE, null)
         return SetupData(
         ptoBalanceHours = preferences.getString(KEY_PTO, "").orEmpty(),
         sickBalanceHours = preferences.getString(KEY_SICK, "").orEmpty(),
@@ -38,6 +40,7 @@ class SetupPreferences(context: Context) {
         callInsRemaining = preferences.getString(KEY_CALL_INS_REMAINING, "").orEmpty(),
         callInsBalanceYear = preferences.getString(KEY_CALL_INS_YEAR, "").orEmpty(),
         birthdayMonth = preferences.getString(KEY_BIRTHDAY_MONTH, "").orEmpty(),
+        floatingHolidayAllowance = storedFloatingAllowance ?: if (isComplete) "2" else "",
         )
     }
 
@@ -54,6 +57,7 @@ class SetupPreferences(context: Context) {
             .putString(KEY_CALL_INS_REMAINING, data.callInsRemaining)
             .putString(KEY_CALL_INS_YEAR, data.callInsBalanceYear)
             .putString(KEY_BIRTHDAY_MONTH, data.birthdayMonth)
+            .putString(KEY_FLOATING_ALLOWANCE, data.floatingHolidayAllowance)
             .putBoolean(KEY_COMPLETE, true)
             .apply()
     }
@@ -79,5 +83,6 @@ class SetupPreferences(context: Context) {
         const val KEY_CALL_INS_REMAINING = "call_ins_remaining"
         const val KEY_CALL_INS_YEAR = "call_ins_balance_year"
         const val KEY_BIRTHDAY_MONTH = "birthday_month"
+        const val KEY_FLOATING_ALLOWANCE = "floating_holiday_allowance"
     }
 }

@@ -166,6 +166,7 @@ object BackupImporter {
                 callInsRemaining = setupJson.optString("callInsRemaining", currentSetup.callInsRemaining),
                 callInsBalanceYear = setupJson.optString("callInsBalanceYear", currentSetup.callInsBalanceYear),
                 birthdayMonth = setupJson.optString("birthdayMonth", currentSetup.birthdayMonth),
+                floatingHolidayAllowance = setupJson.optString("floatingHolidayAllowance", currentSetup.floatingHolidayAllowance),
             )
 
             BackupImportResult(
