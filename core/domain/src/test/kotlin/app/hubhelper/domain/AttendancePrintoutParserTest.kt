@@ -121,4 +121,24 @@ class AttendancePrintoutParserTest {
         assertEquals("2026-08-02", result.rows.last().date.toString())
         assertEquals(4, result.currentTotalHalfPoints)
     }
+
+    @Test
+    fun `orders rows by date when pages arrive reversed`() {
+        val text = """
+            --- Page 2 ---
+            8-02-26 Absent 2.0
+            2.0
+            --- Page 1 ---
+            Point History
+            Date Comment Points to Date
+            8-01-26 1pt Absent 1.0
+            Employee Signature
+        """.trimIndent()
+
+        val result = AttendancePrintoutParser().parse(text)
+
+        assertEquals(listOf("2026-08-01", "2026-08-02"), result.rows.map { it.date.toString() })
+        assertEquals(2, result.rows.last().adjustmentHalfPoints)
+        assertEquals(4, result.currentTotalHalfPoints)
+    }
 }

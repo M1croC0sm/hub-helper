@@ -2,6 +2,12 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.4 — 2026-08-29
+
+### Fixed
+
+- Attendance rows are sorted by their dates before missing point changes are inferred, so pages uploaded out of order still produce chronological records and the final running total.
+
 ## 0.9.3 — 2026-08-29
 
 ### Fixed

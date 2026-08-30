@@ -50,8 +50,8 @@ class AttendancePrintoutParser {
         if (tablePage < 0) {
             return ParsedAttendanceStatement(emptyList(), null, listOf("Attendance table header was not recognized; no rows were imported"))
         }
-        val lines = normalizedPages.drop(tablePage).flatMapIndexed { pageIndex, page ->
-            val start = if (pageIndex == 0) {
+        val lines = normalizedPages.flatMapIndexed { pageIndex, page ->
+            val start = if (pageIndex == tablePage) {
                 page.indexOfFirst { line ->
                     line.contains("point history", ignoreCase = true) ||
                         (line.contains("date", ignoreCase = true) && line.contains("point", ignoreCase = true))
@@ -68,7 +68,7 @@ class AttendancePrintoutParser {
         }
 
         val rows = if (inlineRows.size >= allDates.size.coerceAtMost(2)) {
-            inferMissingAdjustments(inlineRows)
+            inferMissingAdjustments(inlineRows.sortedBy { it.date })
         } else {
             parseSeparatedColumns(lines, allDates, standaloneTotals, warnings)
         }
@@ -117,7 +117,7 @@ class AttendancePrintoutParser {
                 runningTotalHalfPoints = totals[index],
             )
         }
-        return inferMissingAdjustments(rawRows)
+        return inferMissingAdjustments(rawRows.sortedBy { it.date })
     }
 
     private fun inferMissingAdjustments(rows: List<ParsedAttendanceRow>): List<ParsedAttendanceRow> =
