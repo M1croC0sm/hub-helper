@@ -15,6 +15,19 @@ class AttendanceRepository internal constructor(private val dao: AttendanceDao) 
 
     suspend fun allEvents(): List<AttendanceEvent> = dao.getAll().map(AttendanceEventEntity::toDomain)
 
+    /** Removes only normalized duplicates, retaining distinct same-day details. */
+    suspend fun removeDuplicateEvents(): Int {
+        val seen = mutableSetOf<String>()
+        var removed = 0
+        allEvents().sortedBy { it.id.toLongOrNull() ?: Long.MAX_VALUE }.forEach { event ->
+            val key = listOf(event.occurredOn, event.type, event.points.value, event.status, event.note.canonicalNote()).joinToString("|")
+            if (!seen.add(key)) {
+                event.id.toLongOrNull()?.let { dao.deleteById(it); removed++ }
+            }
+        }
+        return removed
+    }
+
     suspend fun hasSourceDocument(documentId: String): Boolean = dao.countBySourceDocument(documentId) > 0
 
     suspend fun add(

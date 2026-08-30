@@ -2,6 +2,12 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.9.5 — 2026-08-29
+
+### Fixed
+
+- Existing normalized duplicate attendance rows are cleaned up once at startup, while distinct events on the same date remain separate.
+
 ## 0.9.4 — 2026-08-29
 
 ### Fixed

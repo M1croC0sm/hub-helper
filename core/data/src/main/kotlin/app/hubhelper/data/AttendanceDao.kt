@@ -26,6 +26,9 @@ interface AttendanceDao {
         status: String,
     ): List<AttendanceEventEntity>
 
+    @Query("DELETE FROM attendance_events WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Insert
     suspend fun insert(event: AttendanceEventEntity): Long
 
