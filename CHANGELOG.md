@@ -2,6 +2,14 @@
 
 All notable user-facing changes to Hub Helper are recorded here.
 
+## 0.10.4 — 2026-08-30
+
+### Fixed
+
+- Returning a debug date to the device date now clears the override and its warning.
+- Call-ins and payday tiles now share an intrinsic row height.
+- Payday dates use larger type, an unmistakable gray progression, and turn green when the effective app date is payday.
+
 ## 0.10.3 — 2026-08-30
 
 ### Changed

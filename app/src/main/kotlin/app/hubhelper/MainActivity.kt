@@ -144,8 +144,9 @@ class MainActivity : FragmentActivity() {
                     appDate = overrideDate ?: LocalDate.now(),
                     overrideDate = overrideDate,
                     onDateOverrideChanged = { date ->
-                        debugDateController.setOverride(date)
-                        overrideDate = date
+                        val normalized = date?.takeUnless { it == LocalDate.now() }
+                        debugDateController.setOverride(normalized)
+                        overrideDate = normalized
                     },
                     setupData = setupData,
                     onSetupDataChanged = { data ->

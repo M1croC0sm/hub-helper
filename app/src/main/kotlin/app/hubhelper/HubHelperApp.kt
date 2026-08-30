@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +48,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -713,17 +717,20 @@ private fun HomeScreen(
         }
         val nextPayday = paydays.firstOrNull { !it.isBefore(appDate) }
         if (!largeFont && nextPayday != null) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
-                CallInPanel(callInsRemaining, Modifier.weight(1f)) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
+                CallInPanel(callInsRemaining, Modifier.weight(1f).fillMaxHeight()) {
                     onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.CALL_IN))
                 }
                 val paydayDaysAway = ChronoUnit.DAYS.between(appDate, nextPayday).coerceAtLeast(0)
                 val paydayProgress = (1f - paydayDaysAway.toFloat() / 14f).coerceIn(0f, 1f)
-                val paydayColor = if (nextPayday == appDate) design.good else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f + paydayProgress * 0.45f)
-                HubPanel(Modifier.weight(1f).clickable { onViewCalendar(CalendarRequest(YearMonth.from(nextPayday))) }, accent = paydayColor) {
+                val darkSurface = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                val faded = if (darkSurface) Color(0xFF555A60) else Color(0xFFB7B7B7)
+                val bright = if (darkSurface) Color.White else Color(0xFF151515)
+                val paydayColor = if (nextPayday == appDate) design.good else lerp(faded, bright, paydayProgress)
+                HubPanel(Modifier.weight(1f).fillMaxHeight().clickable { onViewCalendar(CalendarRequest(YearMonth.from(nextPayday))) }, accent = paydayColor) {
                     SectionLabel("Next payday", color = paydayColor)
                     Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(nextPayday.format(DateTimeFormatter.ofPattern("MMM d, yy")), style = MaterialTheme.typography.titleMedium, color = paydayColor, fontWeight = FontWeight.SemiBold)
+                        Text(nextPayday.format(DateTimeFormatter.ofPattern("MMM d, yy")), style = MaterialTheme.typography.titleLarge, color = paydayColor, fontWeight = FontWeight.Bold)
                         Text("FRIDAY", style = MaterialTheme.typography.labelSmall, color = paydayColor)
                     }
                 }
@@ -733,11 +740,14 @@ private fun HomeScreen(
             nextPayday?.let { date ->
                 val paydayDaysAway = ChronoUnit.DAYS.between(appDate, date).coerceAtLeast(0)
                 val paydayProgress = (1f - paydayDaysAway.toFloat() / 14f).coerceIn(0f, 1f)
-                val paydayColor = if (date == appDate) design.good else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f + paydayProgress * 0.45f)
+                val darkSurface = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                val faded = if (darkSurface) Color(0xFF555A60) else Color(0xFFB7B7B7)
+                val bright = if (darkSurface) Color.White else Color(0xFF151515)
+                val paydayColor = if (date == appDate) design.good else lerp(faded, bright, paydayProgress)
                 HubPanel(Modifier.fillMaxWidth().clickable { onViewCalendar(CalendarRequest(YearMonth.from(date))) }, accent = paydayColor) {
                     SectionLabel("Next payday", color = paydayColor)
                     Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(date.format(DateTimeFormatter.ofPattern("MMM d, yy")), style = MaterialTheme.typography.titleMedium, color = paydayColor, fontWeight = FontWeight.SemiBold)
+                        Text(date.format(DateTimeFormatter.ofPattern("MMM d, yy")), style = MaterialTheme.typography.titleLarge, color = paydayColor, fontWeight = FontWeight.Bold)
                         Text("FRIDAY", style = MaterialTheme.typography.labelSmall, color = paydayColor)
                     }
                 }
@@ -1038,7 +1048,7 @@ private fun SettingsScreen(
         ) { Text("TIME SET • ${reminderPreference.time.format(DateTimeFormatter.ofPattern("h:mm a"))}") }
         Text("Uses the phone's local time. Android may delay background work slightly to protect battery.", style = MaterialTheme.typography.bodySmall)
         DebugTools(appDate, overrideDate, onDateOverrideChanged)
-        Text("Hubb Helper 0.10.3 • build 37", style = MaterialTheme.typography.bodySmall)
+        Text("Hubb Helper 0.10.4 • build 38", style = MaterialTheme.typography.bodySmall)
     }
     if (showReminderTimePicker) {
         ReminderTimePickerDialog(
@@ -1297,7 +1307,7 @@ private fun UserManualScreen(padding: PaddingValues) {
             "Appearance",
             "Settings offers Industrial Instrument, Clear & Easy, and Soft & Friendly. Industrial uses compact chamfered instrument panels, Clear & Easy prioritizes larger text and obvious controls, and Soft & Friendly uses rounded forms and a calm palette. Each theme supports Follow system, Light, and Dark modes. All fonts are bundled for offline use.",
         )
-        Text("Manual for Hubb Helper 0.10.0", style = MaterialTheme.typography.bodySmall)
+        Text("Manual for Hubb Helper 0.10.4", style = MaterialTheme.typography.bodySmall)
     }
 }
 
