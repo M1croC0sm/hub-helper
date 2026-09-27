@@ -27,6 +27,7 @@ Exports are unencrypted. Automatic 90-day credit awards remain deferred.
 - Implementation sequence and acceptance gates: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 - Current technical design: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Release and verification notes: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
+- Publishing updates: [RELEASE.md](RELEASE.md)
 - Privacy: [PRIVACY.md](PRIVACY.md)
 - Distribution prerequisites: [OPEN_SOURCE_READINESS.md](OPEN_SOURCE_READINESS.md)
 

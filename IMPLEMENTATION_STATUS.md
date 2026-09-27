@@ -75,7 +75,8 @@ need reopening. Legacy unknown schedule/provenance remains uncertain by design.
 
 The debug APK is installable with the development key. The release APK is built
 and minified but remains unsigned until a production signing key is configured.
-No GitHub release, download-site metadata, or public distribution is published by
-this implementation. Existing content-redistribution and software-license review
+The initial implementation did not publish distribution artifacts. The subsequent
+website update establishes 0.12.0 as the signing baseline; see RELEASE.md for the
+one-time legacy reinstall and the verified publishing workflow. Existing content-redistribution and software-license review
 requirements remain in effect. Automatic 90-day credit awards, encrypted portable
 backups and document Q&A remain deferred as specified in the plan.

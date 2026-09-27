@@ -22,3 +22,6 @@ captures/
 
 # Legacy scan stored with an incorrect Markdown extension
 Light Industrial Attendance Policy.md
+
+# Local Python tooling caches
+__pycache__/

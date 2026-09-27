@@ -1,0 +1,12 @@
+{
+  "applicationId": "app.hubhelper",
+  "versionCode": 41,
+  "version": "0.12.0",
+  "tag": "v0.12.0",
+  "signerSha256": "6d0864358fe6e959b0224cfc2a42d41ef1c2d9d5bb77169c1c15eabdbb31aff6",
+  "minSdk": 26,
+  "sha256": "acf86197984ab9a6702e34fd7b914b27e1469267e9c2c647fb4c759d55c72486",
+  "sizeBytes": 58714804,
+  "publishedAt": "2026-09-27",
+  "channel": "Test build"
+}

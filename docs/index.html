@@ -25,10 +25,11 @@
         <h1>A clearer way to keep your work information together.</h1>
         <p class="lead">Hub Helper organizes attendance, PTO, sick time, plant holidays, paydays, and original work documents without accounts, advertising, analytics, or cloud storage.</p>
         <div class="actions">
-          <a class="button primary" href="https://github.com/M1croC0sm/hub-helper/releases/download/v0.11.1/Hub.Helper.apk">Download Hub Helper</a>
+          <a class="button primary" href="{{downloadUrl}}">Download / update Hub Helper</a>
           <a class="button secondary" href="https://github.com/M1croC0sm/hub-helper">View source on GitHub</a>
         </div>
-        <p class="build-line">Android 8.0+ <span>·</span> Version 0.11.1 <span>·</span> Build 40</p>
+        <p><a href="#download">Updating from 0.11.1 or older? Read the one-time reinstall instructions first.</a></p>
+        <p class="build-line">Android 8.0+ <span>·</span> Version {{version}} <span>·</span> Build {{versionCode}}</p>
       </div>
 
       <div class="phone" aria-label="Preview of the Hub Helper home screen">
@@ -72,20 +73,26 @@
 
     <section class="release section-shell" id="download">
       <div>
-        <p class="eyebrow">CURRENT TEST BUILD</p>
-        <h2>Hub Helper 0.11.1</h2>
-        <p>Build 40 · Updated August 30, 2026</p>
+        <p class="eyebrow">CURRENT {{channel}}</p>
+        <h2>Hub Helper {{version}}</h2>
+        <p>Build {{versionCode}} · Updated {{publishedAt}} · {{sizeMb}} MB</p>
       </div>
       <div class="release-notes">
-        <h3>Before installing</h3>
+        <h3>Install or update</h3>
+        <p><strong>One-time change for version 0.11.1 and older:</strong> this download starts a new signing baseline. Export a backup from the old app first, then uninstall it, install this version, and import your backup. Uninstalling removes data still stored in the old app. Future versions from this page will install as updates.</p>
+        <p>If you received version 0.12.0 directly from the maintainer on September 26, you already have the new baseline and do not need to reinstall.</p>
         <ol>
-          <li>Tap <strong>Download Hub Helper</strong> to download the current APK directly.</li>
+          <li>Tap <strong>Download / update Hub Helper</strong> to get the latest APK.</li>
           <li>Allow installation from your browser or file manager if Android asks.</li>
-          <li>Open Hub Helper and complete the private on-device setup.</li>
+          <li>If Hub Helper is already installed, choose <strong>Update</strong>. Your records and settings stay on your phone. New users can complete setup after installing.</li>
         </ol>
+        <p>Bookmark this page. The same address always offers the latest published build. In Hub Helper, open Settings → Share Hub Helper → Open download page to return here.</p>
+        <p>Updates are installed by you; the app does not check the Internet or download updates in the background. Export a backup in Settings before updating. After the one-time transition above, do not uninstall the app to update it.</p>
+        <p>If Android reports a package conflict, keep the installed app and contact the maintainer. Builds signed with a different key cannot update each other.</p>
+        <p><a href="{{releaseUrl}}">What changed in {{version}}</a></p>
         <div class="checksum">
           <span>SHA-256</span>
-          <code id="checksum">cbd7aa5c53f2c919cbf725519d06ee1fdfba013cf2723a55eb0c947944dca0ba</code>
+          <code id="checksum">{{sha256}}</code>
           <button type="button" id="copy-checksum">Copy</button>
         </div>
       </div>
