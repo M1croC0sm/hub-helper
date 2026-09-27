@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CallInDao {
+    @Query("SELECT * FROM call_in_events WHERE stableId = :stableId LIMIT 1")
+    suspend fun byStableId(stableId: String): CallInEntity?
+
+    @Query("SELECT * FROM call_in_events")
+    suspend fun getAll(): List<CallInEntity>
+
     @Query("SELECT * FROM call_in_events ORDER BY occurredEpochDay DESC, id DESC")
     fun observeAll(): Flow<List<CallInEntity>>
 

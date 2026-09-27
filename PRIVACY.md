@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: August 20, 2026
+Last updated: September 26, 2026
 
 Hub Helper is an unofficial, privacy-first Android application. It is not affiliated with or endorsed by Hubbell Incorporated, Killark, the IBEW, or the IAM.
 
@@ -22,7 +22,7 @@ Users may explicitly export a ZIP backup. Exported files are outside the app's p
 
 ## Retention and deletion
 
-Data remains on the device until the user deletes individual records, removes documents, resets the app, clears app storage, or uninstalls the app. Resetting the app permanently removes its stored records and documents.
+Data remains on the device until the user deletes individual records, removes documents, resets the app, clears app storage, or uninstalls the app. Corrections retain an audit history. Deleting a source original removes its file and OCR text while retaining source-identifying metadata for linked records. Resetting the app removes stored records, audit history, originals, and working files; appearance preferences are retained.
 
 ## Accuracy and employment decisions
 

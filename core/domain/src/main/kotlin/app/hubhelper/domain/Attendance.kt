@@ -96,6 +96,11 @@ class AttendanceCalculator(
         )
     }
 
+    fun totalWithOpening(events: List<AttendanceEvent>, asOf: LocalDate, opening: HalfPoints): HalfPoints {
+        val net = breakdown(events, asOf).includedEvents.sumOf { if (it.type == AttendanceEventType.ATTENDANCE_CREDIT) -it.points.value.toLong() else it.points.value.toLong() }
+        return HalfPoints((opening.value.toLong() + net).coerceAtLeast(-2).toInt())
+    }
+
     fun summarize(events: List<AttendanceEvent>, asOf: LocalDate): AttendanceSummary {
         val activeConfirmed = breakdown(events, asOf).includedEvents
 

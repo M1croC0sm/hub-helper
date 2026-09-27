@@ -97,6 +97,7 @@ object WeeklyReminderScheduler {
 
 class WeeklyCheckInWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
+        if (!ReminderPreferences(applicationContext).load().enabled) return Result.success()
         WeeklyReminderScheduler.notifyNow(applicationContext)
         WeeklyReminderScheduler.apply(applicationContext, ReminderPreferences(applicationContext).load())
         return Result.success()

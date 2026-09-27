@@ -66,10 +66,10 @@ object TimeOffCalculator {
         val firstIncludedDate = if (hasAnnualReset) LocalDate.of(asOf.year, 1, 1) else enteredBalanceDate
         val changedMinutes = adjustments
             .filter { it.kind == kind && !it.occurredOn.isBefore(firstIncludedDate) && !it.occurredOn.isAfter(asOf) }
-            .sumOf { it.minutes }
+            .sumOf { it.minutes.toLong() }
         val callInMinutes = if (kind == TimeBalanceKind.PTO) {
-            callIns.filter { !it.occurredOn.isBefore(firstIncludedDate) && !it.occurredOn.isAfter(asOf) }.sumOf { it.ptoMinutes }
-        } else 0
+            callIns.filter { !it.occurredOn.isBefore(firstIncludedDate) && !it.occurredOn.isAfter(asOf) }.sumOf { it.ptoMinutes.toLong() }
+        } else 0L
         val separatelyRecordedPtoDates = adjustments.filter {
             it.kind == TimeBalanceKind.PTO && it.minutes < 0 && !it.occurredOn.isBefore(firstIncludedDate) && !it.occurredOn.isAfter(asOf)
         }.mapTo(mutableSetOf()) { it.occurredOn }
@@ -77,11 +77,14 @@ object TimeOffCalculator {
             bookedPtoDays.filter {
                 it.type == BookedTimeType.REGULAR_PTO &&
                     !it.date.isBefore(firstIncludedDate) && !it.date.isAfter(asOf) &&
-                    it.date !in separatelyRecordedPtoDates
-            }.sumOf { regularBookedPtoMinutes }
-        } else 0
+                    it.status in setOf(BookingStatus.APPROVED, BookingStatus.TAKEN) &&
+                    callIns.none { callIn -> callIn.bookingId == it.stableId && !callIn.occurredOn.isAfter(asOf) } &&
+                    adjustments.none { adjustment -> adjustment.bookingId == it.stableId && !adjustment.occurredOn.isAfter(asOf) } &&
+                    (!it.legacyAssumption || it.date !in separatelyRecordedPtoDates)
+            }.sumOf { (it.durationMinutes.takeIf { minutes -> minutes > 0 } ?: regularBookedPtoMinutes).toLong() }
+        } else 0L
         return baseHours
-            .add(BigDecimal(changedMinutes - callInMinutes - bookedMinutes).divide(BigDecimal(60)))
+            .add(BigDecimal(changedMinutes - callInMinutes - bookedMinutes).divide(BigDecimal(60), 4, java.math.RoundingMode.HALF_UP))
             .stripTrailingZeros()
             .toPlainString()
     }

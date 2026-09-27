@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TimeBalanceDao {
+    @Query("SELECT * FROM time_balance_adjustments WHERE stableId = :stableId LIMIT 1")
+    suspend fun byStableId(stableId: String): TimeBalanceAdjustmentEntity?
+
+    @Query("SELECT * FROM time_balance_adjustments")
+    suspend fun getAll(): List<TimeBalanceAdjustmentEntity>
+
     @Query("SELECT * FROM time_balance_adjustments ORDER BY occurredEpochDay DESC, id DESC")
     fun observeAll(): Flow<List<TimeBalanceAdjustmentEntity>>
 

@@ -1,6 +1,7 @@
 package app.hubhelper.data
 
 import android.content.Context
+import androidx.room.withTransaction
 import app.hubhelper.domain.AttendanceEvent
 import app.hubhelper.domain.AttendanceEventStatus
 import app.hubhelper.domain.AttendanceEventType
@@ -10,7 +11,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class AttendanceRepository internal constructor(private val dao: AttendanceDao) {
+class AttendanceRepository internal constructor(private val dao: AttendanceDao, private val database: HubHelperDatabase) {
     val events: Flow<List<AttendanceEvent>> = dao.observeAll().map { rows -> rows.map(AttendanceEventEntity::toDomain) }
 
     suspend fun allEvents(): List<AttendanceEvent> = dao.getAll().map(AttendanceEventEntity::toDomain)
@@ -37,17 +38,21 @@ class AttendanceRepository internal constructor(private val dao: AttendanceDao) 
         status: AttendanceEventStatus,
         note: String?,
         sourceDocumentId: String? = null,
+        sourcePageNumber: Int? = null,
+        policyVersion: String? = null,
+        stableId: String = java.util.UUID.randomUUID().toString(),
     ) {
         dao.insert(
             AttendanceEventEntity(
+                stableId = stableId,
                 occurredEpochDay = occurredOn.toEpochDay(),
                 type = type.name,
                 halfPoints = points.value,
                 status = status.name,
                 note = note?.trim()?.takeIf(String::isNotEmpty),
                 sourceDocumentId = sourceDocumentId,
-                sourcePageNumber = null,
-                policyVersion = "Light Industrial Attendance Policy / version unknown",
+                sourcePageNumber = sourcePageNumber,
+                policyVersion = policyVersion,
                 createdAtEpochMillis = System.currentTimeMillis(),
             ),
         )
@@ -61,7 +66,18 @@ class AttendanceRepository internal constructor(private val dao: AttendanceDao) 
         status: AttendanceEventStatus,
         note: String?,
         sourceDocumentId: String? = null,
+        sourcePageNumber: Int? = null,
+        importIdentity: String? = null,
     ): Boolean {
+        if (importIdentity != null) {
+            val existing = dao.byStableId(importIdentity)
+            if (existing != null) {
+                require(existing.occurredEpochDay == occurredOn.toEpochDay() && existing.halfPoints == points.value && existing.type == type.name && existing.status == status.name) { "A previously reviewed row changed. Correct its existing attendance event instead." }
+                return false
+            }
+            add(occurredOn, type, points, status, note, sourceDocumentId, sourcePageNumber, stableId = importIdentity)
+            return true
+        }
         val normalizedNote = note.canonicalNote()
         val duplicate = dao.findMatching(occurredOn.toEpochDay(), type.name, points.value, status.name)
             .any { it.note.canonicalNote() == normalizedNote }
@@ -75,14 +91,16 @@ class AttendanceRepository internal constructor(private val dao: AttendanceDao) 
         dao.delete(event.toEntity(numericId))
     }
 
-    suspend fun update(event: AttendanceEvent) {
-        val numericId = event.id.toLongOrNull() ?: return
-        dao.update(event.toEntity(numericId).copy(createdAtEpochMillis = System.currentTimeMillis()))
+    suspend fun update(event: AttendanceEvent) = database.withTransaction {
+        val numericId = event.id.toLongOrNull() ?: return@withTransaction
+        val existing = dao.getAll().firstOrNull { it.id == numericId } ?: return@withTransaction
+        dao.update(event.toEntity(numericId).copy(createdAtEpochMillis = existing.createdAtEpochMillis, stableId = existing.stableId))
+        database.businessStateDao().audit(AuditEntryEntity(kind = "attendance correction", payload = "${existing.stableId}: ${existing.status}/${existing.halfPoints} -> ${event.status}/${event.points.value}"))
     }
 
     companion object {
         fun create(context: Context): AttendanceRepository =
-            AttendanceRepository(HubHelperDatabase.get(context).attendanceDao())
+            AttendanceRepository(HubHelperDatabase.get(context).attendanceDao(), HubHelperDatabase.get(context))
     }
 }
 

@@ -1,107 +1,134 @@
 # Hub Helper Architecture
 
-## Architecture decisions
+## Scope and boundaries
 
-Hub Helper is a single-user, offline-first Android application. Version 1 has no
-server component, user account, analytics SDK, advertising SDK, or Internet
-permission. The minimum supported Android version is Android 8 (API 26).
+Hub Helper is a single-user, offline Android application. There is no backend,
+account, analytics service, or Internet permission. The minimum Android version
+is API 26. Keep the existing three Gradle modules:
 
-The code is organized around three boundaries:
+- `core:domain`: Android-independent models, exact minute values, half-points,
+  policy calculations, and parsers.
+- `core:data`: Room entities/DAOs, repositories, migrations, and coordination of
+  operations involving database references and original files.
+- `app`: Compose features, ViewModels, application operations, platform OCR,
+  reminders, lock, setup conversion, and backup adapters.
 
-1. **UI:** Jetpack Compose screens and state holders. UI code presents results
-   and explanations but does not calculate policy outcomes.
-2. **Domain:** Pure Kotlin models and deterministic policy calculators. Points
-   are stored as integer half-points rather than floating-point numbers. This
-   layer has no Android dependencies and is covered by unit tests.
-3. **Data:** Room will store structured records and full-text-search data.
-   Original PDFs and page images will live in app-private files. Database rows
-   will store stable references to those files and their derived OCR text.
+Home, Settings, navigation, and manual content are separate files. `LedgerViewModel`
+combines loaded repository streams into one presentation state for Home,
+Attendance, and Calendar. `DocumentsViewModel` owns asynchronous page search.
+`AppOperations` runs user writes in a retained ViewModel scope, prevents concurrent
+submissions, and presents operation failures. Compose retains simple drafts and
+navigation using saved state. `AppContainer` supplies repository dependencies.
 
-The Gradle modules are `app`, `core:domain`, and `core:data`. Room database code
-is isolated from the UI and policy engine in `core:data`.
+The retained shared-ledger ViewModel is intentional: these three screens need the
+same consistent inputs. Separate ViewModels for each small screen are unnecessary
+until their state lifecycles diverge. Repositories still expose concrete types;
+a larger interface/module extraction can follow demonstrated substitution needs.
 
-## Data ownership and provenance
+## Database and business state
 
-Original scans and imported PDFs are evidence and must never be rewritten by
-OCR or normalization. Derived OCR text can be regenerated. Any reviewed rule or
-personal record derived from a document can link to:
+Room schema 5 migrates explicitly from schemas 1–4. It adds stable record identities,
+booking duration/status/usage links, generated-holiday metadata, business-state
+and audit records, restore receipts, document tombstones, page text and FTS.
+Committed schema JSON is the migration contract.
 
-- document identifier and immutable original file;
-- page number or page-image identifier;
-- document effective date and policy version, when known;
-- exact supporting text span, when available; and
-- review state and date.
+`SetupStore` migrates the existing preferences into Room once, retaining their
+original values. The setup record and its audit history are committed together.
+Preferences remain the store for interface/device settings. Call-in transactions
+change their annual counter and event together. Backup restoration includes setup
+within its database transaction.
 
-Rules learned from an employee report, verbal notice, or later practice are
-stored separately from transcribed documents with explicit provenance and a
-verification state. They are never inserted into the text of a printed source.
+Legacy setup strings are preserved rather than silently rounded during migration;
+new minute inputs are validated exactly at the boundary. `Minutes` represents
+exact whole minutes; decimal-hour rendering uses an explicit rounding policy and
+is never persisted as a replacement transaction. Half-points remain integers.
 
-Contract/policy data and personal records use separate tables and repositories.
-Deleting a personal event must not delete its source document. Deleting an
-original document requires an explicit warning and leaves affected records
-marked as having a missing source.
+## Attendance and reconciliation
 
-## Planned local data model
+Only confirmed events affect the confirmed total. Individual charges expire on
+their 12-month anniversary. Recorded credits and the existing negative-one floor
+remain supported; estimated 90-day dates do not award credits automatically.
 
-- `Document`: title, category, dates, version, original-file metadata, checksum
-- `DocumentPage`: stable page number, original image/PDF position, OCR status
-- `TextBlock`: page, reading order, text, optional bounding box, FTS content
-- `ReviewedRule`: typed rule payload, source passage, review/version metadata
-- `AttendanceEvent`: date, type, half-points, status, source, notes
-- `BalanceSnapshot`: PTO/sick balance at a date and optional source
-- `TimeOffEvent`: type, amount, status, date range, optional source
-- `ReminderPreference`: weekly check-in schedule and privacy settings
+A reviewed statement records a reported balance through the selected end-of-day
+boundary. The reconciliation calculates an opening remainder relative to the
+confirmed dated history at that boundary. Later events and expiration change the
+result. Unknown opening history has no invented expiration dates. Snapshot date,
+setup values, and reconciliation audit are stored together.
 
-The version-1 Room schema is committed under `core/data/schemas`. Future schema
-changes require explicit migrations and migration tests.
+Correcting/rescinding an event changes its contribution. Adding historical detail
+through the explicitly labelled past-evidence tool preserves the reported balance
+transactionally. Normal startup never deletes apparently duplicate events.
 
-## Attendance calculation boundary
+Imported rows use a stable document/row identity. A repeated accepted row is
+skipped; a changed previously accepted row must be corrected explicitly. Page
+references are retained only where the parser can identify them unambiguously.
+Policy uncertainty is visible; no new employment-policy interpretation is inferred.
 
-Only confirmed events affect the confirmed total. Pending, excused, disputed,
-and rescinded events remain visible but do not silently affect it. Each result
-must be explainable from stored events and a versioned rule.
+## Time off and holidays
 
-The reviewed attendance transcription states that individual points expire on
-their 12-month anniversary. The 90-day provision is a separate attendance
-credit. Annual expiration is implemented in the domain scaffold. The credit
-engine is deferred until the original policy's effective date/version and edge
-cases are reviewed, including how credits interact with half-points, corrected
-events, and a negative-one balance.
+New bookings retain duration, stable ID, and requested/approved/taken/cancelled
+state. Approved bookings deduct automatically on their date. Cancelled/requested
+bookings do not deduct. Explicit links between bookings and actual usage/call-ins
+avoid double counting. Legacy date-only matching remains confined to migrated
+bookings marked with an assumed duration.
 
-## Search and document Q&A
+Changing a shift preserves saved booking durations and records an explicit effective
+date plus a schedule-change audit. Default imported booking durations consult this
+history. Legacy schedules without a known start date remain labelled as assumed;
+unknown past shifts are never reconstructed silently.
 
-Room FTS provides the first searchable document experience. Results always open
-the original page. OCR confidence or unreadable passages should be disclosed.
+Generated holidays have stable identities and suppression state. Reviewed additions
+can supersede generated entries. Existing legacy holiday dates remain authoritative
+rather than being destructively reclassified without source information.
 
-On-device natural-language Q&A is a later enhancement. It may retrieve and
-summarize passages, but it must cite pages, show conflicting passages, and never
-perform balances or deadline calculations. The deterministic domain layer owns
-those calculations.
+## Documents and OCR
 
-## Privacy and resilience
+Original files remain unchanged in private storage and retain SHA-256 checksums.
+PDFs and image collections are viewed by page using bounded bitmap sizes. Mixed
+collections are flattened in original order for viewing/OCR.
 
-- Android backup is disabled by default.
-- App data uses platform app-private storage; device-backed encryption is the
-  baseline. Biometric/app lock is planned before handling production data.
-- Notifications contain generic wording on the lock screen.
-- Export is explicit, user-initiated, and warns that exported files leave the
-  app's protection boundary.
-- Destructive operations require confirmation and are tested for referential
-  integrity.
+Unique WorkManager jobs process pages, retain completed OCR results, and support
+retry/cancellation. Pages store text, status, and recognized line/bounding-box
+metadata. Room FTS searches page text; hits open the original page. Bundled policy
+reference search remains a separate local-text search experience.
 
-## Built-in user manual
+Reviewed import changes are separate from original OCR. Users can reject rows,
+edit dates/point amounts/types, and open the source page before accepting them.
+Deleting an original retains a tombstone so dependent records can disclose the
+unavailable source. Page text/index entries are removed with that deletion.
 
-The app includes an offline manual under Settings. Manual content ships with and
-is versioned alongside the app, requires no network connection, and covers
-setup, calculations, document provenance, privacy, backup/export, debug-build
-testing, and troubleshooting. Relevant empty and error states should link to
-the applicable manual section where practical.
+## Backup and recovery
 
-## Testing strategy
+Current exports use format 7, containing schema-versioned rows, stable identities,
+setup/audit state, page metadata, and originals. The export uses a database snapshot
+and a private staging ZIP. Files are checksum-checked and the archive is read back
+before copying to the chosen destination. Exports are unencrypted.
 
-- Domain unit tests cover anniversary boundaries, half-points, statuses, and
-  later all reviewed attendance/PTO rules.
-- Repository tests cover Room migrations, search, and source links.
-- Instrumented tests cover document import, process recreation, and privacy.
-- A small set of redacted source fixtures will test statement extraction and
-  reconciliation without including personal production data.
+Restore extracts into random staging filenames with entry/count/size limits. It
+validates before applying changes, supports Merge or Replace, and detects conflicting
+stable records rather than silently overwriting them. Merge skips identical records.
+
+Filesystem changes and Room transactions are not jointly atomic. New originals use
+unique paths journaled before copying. Database changes commit together. Startup
+recovery removes unreferenced promoted files while retaining committed originals.
+Existing records/files survive a failed replacement transaction.
+
+Formats 1–4 and 6 have a legacy import adapter and archive receipts preventing repeat
+import of the same legacy manifest. Undocumented format 5 is rejected. Cross-archive
+legacy deduplication cannot be guaranteed because those formats omit stable IDs.
+
+## Privacy and verification
+
+The merged release manifest removes Internet permission and excludes Android cloud
+backup and device transfer. App lock requires an available supported authenticator;
+locked-mode windows suppress screenshots/recent-app previews. Notifications remain
+generic. Reset cancels work and removes business data, originals, and import/capture
+staging; appearance preferences are intentionally retained.
+
+Tests include domain boundaries, parsers, exact-minute formatting, booking lifecycle,
+backup validation, Room/FTS behavior, schema 1–4 migration, restore round trips,
+interruption recovery, and statement end-of-day reconciliation. Robolectric runs
+storage tests on APIs 26 and 28; emulator/device checks supplement these tests.
+CI builds debug and minified release variants and retains verification artifacts.
+Production signing, physical-device accessibility/biometric checks, and content
+redistribution review remain distribution gates, not claims made by a successful build.

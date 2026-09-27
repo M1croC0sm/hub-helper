@@ -31,7 +31,7 @@ object BackupExporter {
         bookedPtoDays: List<BookedPtoDay>,
     ) = withContext(Dispatchers.IO) {
         val manifest = JSONObject().apply {
-            put("formatVersion", 6)
+            put("formatVersion", BackupFormat.CURRENT_VERSION)
             put("exportedAtEpochMillis", System.currentTimeMillis())
             put("setup", JSONObject().apply {
                 put("ptoBalanceHours", setup.ptoBalanceHours)
@@ -45,6 +45,7 @@ object BackupExporter {
                 put("callInsBalanceYear", setup.callInsBalanceYear)
                 put("birthdayMonth", setup.birthdayMonth)
                 put("floatingHolidayAllowance", setup.floatingHolidayAllowance)
+                put("paydayAnchor", setup.paydayAnchor)
             })
             put("attendanceEvents", JSONArray(events.map { event ->
                 JSONObject().apply {
@@ -98,6 +99,8 @@ object BackupExporter {
             }))
         }
 
+        BackupFormat.validate(manifest)
+        documents.forEach { require(File(it.privatePath).isFile) { "Original file missing: ${it.title}" } }
         val raw = requireNotNull(context.contentResolver.openOutputStream(destination, "w")) { "Unable to create backup" }
         raw.use {
             ZipOutputStream(raw).use { zip ->

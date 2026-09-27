@@ -103,4 +103,15 @@ class TimeOffCalculatorTest {
             ),
         )
     }
+
+    @Test fun `removing a floating holiday record restores its availability`() {
+        val asOf = LocalDate.of(2026, 8, 20)
+        val used = TimeBalanceAdjustment("used", asOf, TimeBalanceKind.FLOATING_ANYTIME, -480, null)
+        val booked = BookedPtoDay("booked", asOf, type = BookedTimeType.BIRTHDAY_FLOATING)
+
+        assertEquals(false, floatingHolidayAvailable(BookedTimeType.ANYTIME_FLOATING, listOf(used), listOf(booked), 2026))
+        assertEquals(false, floatingHolidayAvailable(BookedTimeType.BIRTHDAY_FLOATING, listOf(used), listOf(booked), 2026))
+        assertEquals(true, floatingHolidayAvailable(BookedTimeType.ANYTIME_FLOATING, emptyList(), listOf(booked), 2026))
+        assertEquals(true, floatingHolidayAvailable(BookedTimeType.BIRTHDAY_FLOATING, listOf(used), emptyList(), 2026))
+    }
 }

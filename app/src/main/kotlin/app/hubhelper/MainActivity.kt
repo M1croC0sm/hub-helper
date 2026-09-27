@@ -1,6 +1,9 @@
 package app.hubhelper
 
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import androidx.room.withTransaction
+import app.hubhelper.data.HubHelperDatabase
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
@@ -47,6 +50,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val operations = androidx.lifecycle.ViewModelProvider(this)[AppOperations::class.java]
         val debugDateController = createDebugDateController(this)
         val setupPreferences = SetupPreferences(this)
         val attendanceRepository = AttendanceRepository.create(this)
@@ -61,7 +65,9 @@ class MainActivity : FragmentActivity() {
         val themePreferences = ThemePreferences(this)
         val newYearPreferences = NewYearPreferences(this)
         appLockPreferences = AppLockPreferences(this)
+        var lockEnabled by mutableStateOf(appLockPreferences.enabled)
         unlocked = !appLockPreferences.enabled
+        if (appLockPreferences.enabled) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         biometricPrompt = BiometricPrompt(
             this,
             ContextCompat.getMainExecutor(this),
@@ -77,7 +83,11 @@ class MainActivity : FragmentActivity() {
             },
         )
         var overrideDate by mutableStateOf(debugDateController.overrideDate)
+        val database = HubHelperDatabase.get(this)
+        val setupStore = SetupStore(database)
         var setupData by mutableStateOf(setupPreferences.load())
+        var initialized by mutableStateOf(false)
+        var initializationError by mutableStateOf<String?>(null)
         var showSetup by mutableStateOf(!setupPreferences.isComplete)
         var reminderPreference by mutableStateOf(reminderPreferences.load(setupData.shiftPreset))
         var selectedTheme by mutableStateOf(themePreferences.theme)
@@ -86,15 +96,26 @@ class MainActivity : FragmentActivity() {
         var lastAcknowledgedYear by mutableStateOf(newYearPreferences.lastAcknowledgedYear(setupYear))
         if (reminderPreference.enabled) WeeklyReminderScheduler.apply(this, reminderPreference)
 
+        lifecycleScope.launch {
+            try {
+                DatabaseBackup.recover(this@MainActivity)
+                setupStore.initialize(setupPreferences)
+                val saved = setupStore.read()
+                if (saved != null) { setupData = saved; showSetup = false }
+                initialized = true
+                setupStore.data.collect { savedData -> if (savedData != null) setupData = savedData }
+            } catch (error: Exception) { initializationError = error.message ?: "Unable to open records" }
+        }
         setContent {
-            val appScope = rememberCoroutineScope()
-            LaunchedEffect(Unit) {
-                attendanceRepository.removeDuplicateEvents()
-                val secondShift = setupData.shiftPreset == "SECOND"
-                holidayRepository.ensureContractHolidays(LocalDate.now().year, secondShift)
-                holidayRepository.ensureContractHolidays(LocalDate.now().year + 1, secondShift)
+            if (!initialized) {
+                androidx.compose.material3.Text(initializationError ?: "Opening your records…")
+                return@setContent
             }
+            val appScope = operations
+
             var setupAttendancePreview by remember { mutableStateOf<SetupAttendancePreview?>(null) }
+            var deviceDate by remember { mutableStateOf(LocalDate.now()) }
+            LaunchedEffect(Unit) { while (true) { deviceDate = LocalDate.now(); kotlinx.coroutines.delay(30_000) } }
             val darkMode = themeMode.resolveDarkMode(isSystemInDarkTheme())
             SideEffect {
                 WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -111,9 +132,10 @@ class MainActivity : FragmentActivity() {
                     initialData = setupData,
                     canCancel = setupPreferences.isComplete,
                     onComplete = { data ->
-                        setupPreferences.save(data)
-                        setupData = data
-                        showSetup = false
+                        lifecycleScope.launch {
+                            runCatching { setupStore.save(data) }.onSuccess { setupData = data; showSetup = false }
+                                .onFailure { Toast.makeText(this@MainActivity, "Setup was not saved: ${it.message}", Toast.LENGTH_LONG).show() }
+                        }
                         data.pointsSheetUri?.takeIf(setupPreferences::needsPointsSheetImport)?.let { uriText ->
                             appScope.launch {
                                 runCatching {
@@ -141,7 +163,8 @@ class MainActivity : FragmentActivity() {
                 )
             } else {
                 HubHelperApp(
-                    appDate = overrideDate ?: LocalDate.now(),
+                    operations = operations,
+                    appDate = overrideDate ?: deviceDate,
                     overrideDate = overrideDate,
                     onDateOverrideChanged = { date ->
                         val normalized = date?.takeUnless { it == LocalDate.now() }
@@ -150,8 +173,9 @@ class MainActivity : FragmentActivity() {
                     },
                     setupData = setupData,
                     onSetupDataChanged = { data ->
-                        setupPreferences.save(data)
-                        setupData = data
+                        appScope.launch {
+                            runCatching { setupStore.save(data) }.onFailure { Toast.makeText(this@MainActivity, "Changes were not saved: ${it.message}", Toast.LENGTH_LONG).show() }
+                        }
                     },
                     attendanceRepository = attendanceRepository,
                     timeBalanceRepository = timeBalanceRepository,
@@ -164,14 +188,17 @@ class MainActivity : FragmentActivity() {
                     onEditSetup = { showSetup = true },
                     onApplyAttendanceStatement = { document, parsed ->
                         appScope.launch {
-                            val importResult = applyAttendanceStatement(
+                            val importResult = database.withTransaction {
+                            val result = applyAttendanceStatement(
                                 setupData, parsed, document.id, overrideDate ?: LocalDate.now(), attendanceRepository,
                             )
-                            setupPreferences.save(importResult.setup)
+                            setupStore.save(result.setup, "attendance reconciliation")
+                            result
+                            }
                             setupData = importResult.setup
                             Toast.makeText(
                                 this@MainActivity,
-                                "Attendance sheet confirmed: ${importResult.addedCount} saved, ${importResult.skippedCount} already present. Current points were not changed.",
+                                "Attendance sheet confirmed: ${importResult.addedCount} saved, ${importResult.skippedCount} already present. Reported balance reconciled through ${parsed.statementDate ?: (overrideDate ?: LocalDate.now())}.",
                                 Toast.LENGTH_LONG,
                             ).show()
                         }
@@ -182,10 +209,19 @@ class MainActivity : FragmentActivity() {
                         WeeklyReminderScheduler.apply(this, preference)
                         reminderPreference = preference
                     },
-                    appLockEnabled = appLockPreferences.enabled,
+                    appLockEnabled = lockEnabled,
                     onAppLockChanged = { enabled ->
+                        val canAuthenticate = androidx.biometric.BiometricManager.from(this@MainActivity).canAuthenticate(
+                            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+                        if (enabled && canAuthenticate != androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
+                            Toast.makeText(this@MainActivity, "Set up a supported device screen lock first", Toast.LENGTH_LONG).show()
+                        } else {
                         appLockPreferences.enabled = enabled
+                        lockEnabled = enabled
+                        if (enabled) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
                         if (!enabled) unlocked = true
+                        }
                     },
                     selectedTheme = selectedTheme,
                     onThemeChanged = { theme ->
@@ -198,12 +234,13 @@ class MainActivity : FragmentActivity() {
                         themeMode = mode
                     },
                     darkMode = darkMode,
-                    onImportBackup = { source ->
+                    onImportBackup = { source, replace ->
                         appScope.launch {
                             runCatching {
                                 BackupImporter.import(
                                     context = this@MainActivity,
                                     source = source,
+                                    replace = replace,
                                     currentSetup = setupData,
                                     attendanceRepository = attendanceRepository,
                                     timeBalanceRepository = timeBalanceRepository,
@@ -214,7 +251,6 @@ class MainActivity : FragmentActivity() {
                                     bookedPtoRepository = bookedPtoRepository,
                                 )
                             }.onSuccess { result ->
-                                setupPreferences.save(result.setup)
                                 setupData = result.setup
                                 Toast.makeText(
                                     this@MainActivity,
@@ -233,10 +269,24 @@ class MainActivity : FragmentActivity() {
                     onResetApp = {
                         appScope.launch {
                             withContext(Dispatchers.IO) {
+                                androidx.work.WorkManager.getInstance(this@MainActivity).cancelAllWork().result.get()
+                                app.hubhelper.data.StorageCoordinator.mutex.lock()
+                                try {
                                 AppDataResetter.clearAll(this@MainActivity)
                                 File(filesDir, "documents").deleteRecursively()
+                                listOf("camera-captures", "backup-import", "ocr-pages").forEach { File(cacheDir, it).deleteRecursively() }
+                                app.hubhelper.data.RestoreJournal(this@MainActivity).delete()
+                                listOf("weekly_reminder", "new_year_review", "backup_status").forEach { getSharedPreferences(it, MODE_PRIVATE).edit().clear().commit() }
+                                } finally { app.hubhelper.data.StorageCoordinator.mutex.unlock() }
                             }
                             setupPreferences.reset()
+                            appLockPreferences.enabled = false
+                            lockEnabled = false
+                            unlocked = true
+                            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                            reminderPreference = ReminderPreference()
+                            debugDateController.setOverride(null)
+                            overrideDate = null
                             setupData = SetupData()
                             showSetup = true
                             Toast.makeText(this@MainActivity, "All app data was deleted. Starting first-time setup.", Toast.LENGTH_LONG).show()
@@ -249,20 +299,26 @@ class MainActivity : FragmentActivity() {
                     },
                 )
             }
+            OperationStatus(operations)
             setupAttendancePreview?.let { preview ->
                 AttendanceImportPreviewDialog(
                     parsed = preview.parsed,
+                    calculationDate = overrideDate ?: deviceDate,
+                    sourceDocumentId = preview.documentId,
                     manualTotal = setupData.currentAttendancePoints,
                     onDismiss = {
                         setupPreferences.markPointsSheetImported(preview.uriText)
                         setupAttendancePreview = null
                     },
-                    onConfirm = {
+                    onConfirm = { reviewed ->
                         appScope.launch {
-                            val result = applyAttendanceStatement(
-                                setupData, preview.parsed, preview.documentId, overrideDate ?: LocalDate.now(), attendanceRepository,
+                            val result = database.withTransaction {
+                            val reconciled = applyAttendanceStatement(
+                                setupData, reviewed, preview.documentId, overrideDate ?: LocalDate.now(), attendanceRepository,
                             )
-                            setupPreferences.save(result.setup)
+                            setupStore.save(reconciled.setup, "attendance reconciliation")
+                            reconciled
+                            }
                             setupData = result.setup
                             setupPreferences.markPointsSheetImported(preview.uriText)
                             setupAttendancePreview = null
@@ -297,84 +353,3 @@ private data class SetupAttendancePreview(
     val parsed: ParsedAttendanceStatement,
     val uriText: String,
 )
-
-private fun importedAttendanceType(comment: String, adjustmentHalfPoints: Int): AttendanceEventType {
-    if (adjustmentHalfPoints < 0) return AttendanceEventType.ATTENDANCE_CREDIT
-    val normalized = comment.lowercase()
-    return when {
-        "tardy" in normalized || "late" in normalized -> AttendanceEventType.TARDY
-        "left" in normalized || "early" in normalized -> AttendanceEventType.LEFT_EARLY
-        "call" in normalized -> AttendanceEventType.CALL_IN_VIOLATION
-        else -> AttendanceEventType.UNEXCUSED_ABSENCE
-    }
-}
-
-private fun displayHalfPoints(halfPoints: Int): String = HalfPoints(halfPoints).asDisplayValue()
-
-private data class AttendanceImportResult(
-    val setup: SetupData,
-    val addedCount: Int,
-    val skippedCount: Int,
-)
-
-private suspend fun applyAttendanceStatement(
-    setup: SetupData,
-    parsed: ParsedAttendanceStatement,
-    documentId: String,
-    calculationDate: LocalDate,
-    repository: AttendanceRepository,
-): AttendanceImportResult {
-    val usableRows = parsed.rows.filter {
-        it.adjustmentHalfPoints != null && it.adjustmentHalfPoints != 0 && !isAnnualFalloff(it.comment)
-    }
-    var importedActiveTotal = 0
-    var addedCount = 0
-    usableRows.forEach { row ->
-        val adjustment = row.adjustmentHalfPoints!!
-        val added = repository.addIfAbsent(
-            occurredOn = row.date,
-            type = importedAttendanceType(row.comment, adjustment),
-            points = HalfPoints(kotlin.math.abs(adjustment)),
-            status = AttendanceEventStatus.CONFIRMED,
-            note = row.comment,
-            sourceDocumentId = documentId,
-        )
-        if (added) {
-            addedCount++
-            if (!row.date.isAfter(calculationDate) &&
-            (adjustment < 0 || calculationDate.isBefore(row.date.plusMonths(12)))
-            ) importedActiveTotal += adjustment
-        }
-    }
-    val openingHalfPoints = setup.attendanceOpeningRemainder.toBigDecimalOrNull()
-        ?.multiply(java.math.BigDecimal(2))
-        ?.toInt()
-        ?: 0
-    val manualTotal = setup.currentAttendancePoints.toBigDecimalOrNull()
-        ?.multiply(java.math.BigDecimal(2))
-        ?.toInt()
-    val sheetTotal = manualTotal ?: parsed.currentTotalHalfPoints
-    if (sheetTotal != null) {
-        val datedPoints = AttendanceCalculator().summarize(repository.allEvents(), calculationDate).confirmedPoints.value
-        val reconciledOpening = sheetTotal - datedPoints
-        return AttendanceImportResult(
-            setup = setup.copy(
-                currentAttendancePoints = HalfPoints(sheetTotal).asDisplayValue(),
-                attendanceOpeningRemainder = displayHalfPoints(reconciledOpening),
-            ),
-            addedCount = addedCount,
-            skippedCount = usableRows.size - addedCount,
-        )
-    }
-    return AttendanceImportResult(
-        setup = setup.copy(attendanceOpeningRemainder = displayHalfPoints(openingHalfPoints - importedActiveTotal)),
-        addedCount = addedCount,
-        skippedCount = usableRows.size - addedCount,
-    )
-}
-
-private fun isAnnualFalloff(comment: String): Boolean {
-    val normalized = comment.lowercase()
-    return ("1 year" in normalized || "one year" in normalized || "annual" in normalized) &&
-        ("roll" in normalized || "fall" in normalized)
-}

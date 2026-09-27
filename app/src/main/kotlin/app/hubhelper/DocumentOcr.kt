@@ -1,122 +1,92 @@
 package app.hubhelper
 
 import android.content.Context
-import android.net.Uri
-import app.hubhelper.data.DocumentRepository
-import app.hubhelper.domain.OcrStatus
-import app.hubhelper.domain.DocumentCategory
-import app.hubhelper.domain.WorkDocument
+import androidx.work.*
+import app.hubhelper.data.*
+import app.hubhelper.domain.*
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import java.io.File
-import java.util.UUID
-import java.util.zip.ZipInputStream
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlinx.coroutines.suspendCancellableCoroutine
 
-class DocumentOcr(
-    private val context: Context,
-    private val repository: DocumentRepository,
-) {
-    suspend fun recognize(document: WorkDocument): String? {
-        if (document.mimeType == DocumentRepository.MULTI_PAGE_MIME) return recognizePages(document)
-        if (!document.mimeType.startsWith("image/")) {
-            repository.updateOcr(document.id, null, OcrStatus.UNSUPPORTED)
-            return null
-        }
-        repository.updateOcr(document.id, null, OcrStatus.PROCESSING)
-        try {
-            val image = InputImage.fromFilePath(context, Uri.fromFile(File(document.privatePath)))
-            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-            val result = suspendCancellableCoroutine { continuation ->
-                recognizer.process(image)
-                    .addOnSuccessListener { continuation.resume(it) }
-                    .addOnFailureListener { continuation.resumeWithException(it) }
-            }
-            recognizer.close()
-            val recognizedText = if (document.category == DocumentCategory.ATTENDANCE) {
-                attendanceReadingOrder(result)
-            } else {
-                result.text
-            }
-            repository.updateOcr(document.id, recognizedText, OcrStatus.COMPLETE)
-            return recognizedText
-        } catch (error: Exception) {
-            repository.updateOcr(document.id, error.message, OcrStatus.FAILED)
-            return null
-        }
+class DocumentOcr(private val context: Context, private val repository: DocumentRepository) {
+    fun enqueue(document: WorkDocument) {
+        require(!document.originalDeleted) { "Original has been deleted" }
+        WorkManager.getInstance(context).enqueueUniqueWork("ocr-${document.id}", ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<DocumentOcrWorker>().setInputData(workDataOf("documentId" to document.id)).addTag("document-ocr").build())
     }
+    fun cancel(document: WorkDocument) { WorkManager.getInstance(context).cancelUniqueWork("ocr-${document.id}") }
 
-    private suspend fun recognizePages(document: WorkDocument): String? {
-        repository.updateOcr(document.id, null, OcrStatus.PROCESSING)
-        val tempDirectory = File(context.cacheDir, "ocr-pages/${UUID.randomUUID()}").apply { mkdirs() }
-        return try {
-            val pages = mutableListOf<String>()
-            ZipInputStream(File(document.privatePath).inputStream()).use { zip ->
-                var entry = zip.nextEntry
-                var pageNumber = 1
-                while (entry != null) {
-                    if (!entry.isDirectory && !entry.name.endsWith(".pdf", ignoreCase = true)) {
-                        val extension = entry.name.substringAfterLast('.', "jpg").take(10)
-                        val pageFile = File(tempDirectory, "page-$pageNumber.$extension")
-                        pageFile.outputStream().use(zip::copyTo)
-                        recognizeImage(pageFile, document.category)?.takeIf(String::isNotBlank)?.let { text ->
-                            pages += "--- Page $pageNumber ---\n$text"
+    suspend fun recognize(document: WorkDocument): String? = withContext(Dispatchers.IO) {
+        StorageCoordinator.mutex.withLock {
+            require(repository.get(document.id)?.originalDeleted == false) { "Original unavailable" }
+            val pages = HubHelperDatabase.get(context).documentPageDao()
+            repository.updateOcr(document.id, document.ocrText, OcrStatus.PROCESSING)
+            try {
+                val count = DocumentPages.count(document)
+                require(count > 0) { "Unsupported document format" }
+                val complete = pages.pages(document.id).filter { it.status == "COMPLETE" }.associateBy { it.pageNumber }
+                for (index in 0 until count) {
+                    currentCoroutineContext().ensureActive()
+                    if (complete.containsKey(index + 1)) continue
+                    val bitmap = DocumentPages.render(document, index)
+                    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                    var blocks = "[]"
+                    val text = try {
+                        val result = suspendCancellableCoroutine<com.google.mlkit.vision.text.Text> { continuation ->
+                            recognizer.process(InputImage.fromBitmap(bitmap, 0))
+                                .addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
+                                .addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
                         }
-                    }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
-                    pageNumber++
+                        blocks = org.json.JSONArray(result.textBlocks.flatMap { it.lines }.mapIndexed { order, line ->
+                            org.json.JSONObject().put("order", order).put("text", line.text).apply {
+                                line.boundingBox?.let { box -> put("left", box.left); put("top", box.top); put("right", box.right); put("bottom", box.bottom) }
+                                put("imageWidth", bitmap.width); put("imageHeight", bitmap.height)
+                            }
+                        }).toString()
+                        if (document.category == DocumentCategory.ATTENDANCE) attendanceReadingOrder(result) else result.text
+                    } finally { recognizer.close(); bitmap.recycle() }
+                    pages.put(DocumentPageEntity(documentId = document.id, pageNumber = index + 1, text = text, status = "COMPLETE", error = null, blocksJson = blocks))
                 }
+                val text = pages.pages(document.id).joinToString("\n\n") { "--- Page ${it.pageNumber} ---\n${it.text}" }
+                repository.updateOcr(document.id, text, OcrStatus.COMPLETE)
+                text
+            } catch (cancelled: CancellationException) {
+                withContext(NonCancellable) { repository.updateOcr(document.id, document.ocrText, OcrStatus.NOT_STARTED) }
+                throw cancelled
+            } catch (error: Exception) {
+                repository.updateOcr(document.id, document.ocrText, OcrStatus.FAILED)
+                throw error
             }
-            if (pages.isEmpty()) {
-                repository.updateOcr(document.id, null, OcrStatus.UNSUPPORTED)
-                null
-            } else {
-                pages.joinToString("\n\n").also { repository.updateOcr(document.id, it, OcrStatus.COMPLETE) }
-            }
-        } catch (error: Exception) {
-            repository.updateOcr(document.id, error.message, OcrStatus.FAILED)
-            null
-        } finally {
-            tempDirectory.deleteRecursively()
-        }
-    }
-
-    private suspend fun recognizeImage(file: File, category: DocumentCategory): String? {
-        val image = InputImage.fromFilePath(context, Uri.fromFile(file))
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        return try {
-            val result = suspendCancellableCoroutine { continuation ->
-                recognizer.process(image)
-                    .addOnSuccessListener { continuation.resume(it) }
-                    .addOnFailureListener { continuation.resumeWithException(it) }
-            }
-            if (category == DocumentCategory.ATTENDANCE) attendanceReadingOrder(result) else result.text
-        } finally {
-            recognizer.close()
         }
     }
 
     private fun attendanceReadingOrder(result: com.google.mlkit.vision.text.Text): String {
-        data class PositionedLine(val text: String, val left: Int, val centerY: Int, val height: Int)
-        val lines = result.textBlocks.flatMap { it.lines }.mapNotNull { line ->
-            line.boundingBox?.let { box -> PositionedLine(line.text, box.left, box.centerY(), box.height()) }
-        }.sortedWith(compareBy<PositionedLine> { it.centerY }.thenBy { it.left })
-        if (lines.isEmpty()) return result.text
-        val rows = mutableListOf<MutableList<PositionedLine>>()
+        data class Line(val text: String, val left: Int, val center: Int, val height: Int)
+        val lines = result.textBlocks.flatMap { it.lines }.mapNotNull { line -> line.boundingBox?.let { Line(line.text, it.left, it.centerY(), it.height()) } }
+            .sortedWith(compareBy<Line> { it.center }.thenBy { it.left })
+        val rows = mutableListOf<MutableList<Line>>()
         lines.forEach { line ->
-            val current = rows.lastOrNull()
-            val currentCenter = current?.map { it.centerY }?.average()
-            val tolerance = current?.maxOfOrNull { it.height }?.coerceAtLeast(line.height)?.div(2) ?: 0
-            if (current != null && currentCenter != null && kotlin.math.abs(line.centerY - currentCenter) <= tolerance) {
-                current += line
-            } else {
-                rows += mutableListOf(line)
-            }
+            val row = rows.lastOrNull()
+            if (row != null && kotlin.math.abs(line.center - row.map { it.center }.average()) <= maxOf(line.height, row.maxOf { it.height }) / 2) row.add(line)
+            else rows.add(mutableListOf(line))
         }
-        return rows.joinToString("\n") { row -> row.sortedBy { it.left }.joinToString(" ") { it.text } }
+        return if (rows.isEmpty()) result.text else rows.joinToString("\n") { row -> row.sortedBy { it.left }.joinToString(" ") { it.text } }
+    }
+}
+
+class DocumentOcrWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val repository = DocumentRepository.create(applicationContext)
+        val document = inputData.getString("documentId")?.let { repository.get(it) } ?: return Result.failure()
+        if (document.originalDeleted) return Result.failure()
+        return try {
+            DocumentOcr(applicationContext, repository).recognize(document)
+            Result.success()
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { Result.failure(workDataOf("error" to (error.message ?: "OCR failed"))) }
     }
 }

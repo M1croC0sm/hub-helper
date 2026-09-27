@@ -68,7 +68,7 @@ private fun AttendanceDetailsPanels(
     val breakdown = remember(events, appDate) { calculator.breakdown(events, appDate) }
     val opening = openingBalance.toBigDecimalOrNull() ?: BigDecimal.ZERO
     val datedNet = BigDecimal(summary.confirmedPoints.value).divide(BigDecimal(2))
-    val total = opening.add(datedNet)
+    val total = BigDecimal(AttendanceCalculator().totalWithOpening(events, appDate, app.hubhelper.domain.HalfPoints(opening.multiply(BigDecimal(2)).intValueExact())).value).divide(BigDecimal(2))
     val totalText = total.stripTrailingZeros().toPlainString()
     val design = HubThemeDesign.tokens
     val risk = when (app.hubhelper.domain.attendanceColorBand(total)) {
@@ -123,6 +123,13 @@ private fun AttendanceDetailsPanels(
         HorizontalDivider(Modifier.padding(vertical = 5.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
         SectionLabel("Estimated 90-day credit", color = design.pto)
         CalculationRow(nextCredit?.monthDayYear() ?: "Unknown", "Estimated")
+    }
+    breakdown.includedEvents.filter { it.source != null }.forEach { event ->
+        Text("${event.occurredOn.monthDayYear()} • ${event.points.asDisplayValue()} points", style = MaterialTheme.typography.bodySmall)
+        event.source?.let { SourceEvidenceButton(it.documentId, it.pageNumber) }
+    }
+    if (opening.add(BigDecimal(breakdown.confirmedCharges.value - breakdown.confirmedCredits.value).divide(BigDecimal(2))) < BigDecimal(-1)) {
+        Text("The total is limited to −1 point. The original charges and credits remain in history.")
     }
     OutlinedButton(onClick = onViewRules, modifier = Modifier.fillMaxWidth()) {
         Text("VIEW SOURCE & RULES  ›")

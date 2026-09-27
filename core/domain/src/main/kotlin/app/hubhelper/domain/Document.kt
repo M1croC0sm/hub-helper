@@ -15,4 +15,5 @@ data class WorkDocument(
     val sha256: String,
     val ocrText: String?,
     val ocrStatus: OcrStatus,
+    val originalDeleted: Boolean = false,
 )

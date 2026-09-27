@@ -1,6 +1,11 @@
 package app.hubhelper
 
 import android.content.Context
+import androidx.room.withTransaction
+import app.hubhelper.data.HubHelperDatabase
+import app.hubhelper.data.ImportReceiptEntity
+import app.hubhelper.data.StorageCoordinator
+import kotlinx.coroutines.sync.withLock
 import android.net.Uri
 import app.hubhelper.data.AttendanceRepository
 import app.hubhelper.data.DocumentRepository
@@ -36,7 +41,7 @@ data class BackupImportResult(
 )
 
 object BackupImporter {
-    private const val MAX_ARCHIVE_BYTES = 300L * 1024L * 1024L
+    private const val MAX_ARCHIVE_BYTES = BackupFormat.MAX_BYTES
 
     suspend fun import(
         context: Context,
@@ -49,16 +54,20 @@ object BackupImporter {
         documentRepository: DocumentRepository,
         callInRepository: CallInRepository,
         bookedPtoRepository: BookedPtoRepository,
+        replace: Boolean = false,
     ): BackupImportResult = withContext(Dispatchers.IO) {
+        StorageCoordinator.mutex.withLock {
         val tempDirectory = File(context.cacheDir, "backup-import/${UUID.randomUUID()}").apply { mkdirs() }
         try {
             val entries = mutableMapOf<String, File>()
             var manifestText: String? = null
             var totalBytes = 0L
+            val entryNames = mutableSetOf<String>()
             val input = requireNotNull(context.contentResolver.openInputStream(source)) { "Unable to open backup" }
             ZipInputStream(input.buffered()).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
+                    require(entryNames.size < BackupFormat.MAX_ENTRIES && entryNames.add(entry.name)) { "Too many or duplicate ZIP entries" }
                     require(!entry.isDirectory) { "Backup contains an unexpected directory entry" }
                     val destination = File(tempDirectory, UUID.randomUUID().toString())
                     destination.outputStream().use { output ->
@@ -71,16 +80,41 @@ object BackupImporter {
                             output.write(buffer, 0, read)
                         }
                     }
-                    if (entry.name == "manifest.json") manifestText = destination.readText() else entries[entry.name] = destination
+                    if (entry.name == "manifest.json") {
+                        require(destination.length() <= BackupFormat.MAX_MANIFEST_BYTES) { "Manifest too large" }
+                        manifestText = destination.readText()
+                    } else entries[entry.name] = destination
                     zip.closeEntry()
                     entry = zip.nextEntry
                 }
             }
 
             val manifest = JSONObject(requireNotNull(manifestText) { "Backup does not contain manifest.json" })
-            val formatVersion = manifest.optInt("formatVersion", 0)
-            require(formatVersion in 1..4) { "Unsupported backup format version: $formatVersion" }
+            if (manifest.optInt("formatVersion") == 7) return@withLock DatabaseBackup.restore(context, manifest, entries, replace)
+            require(!replace) { "Legacy backups support additive import only. Export a current backup after migration to use Replace." }
+            BackupFormat.validate(manifest)
+            manifest.optJSONArray("documents")?.let { docs ->
+                repeat(docs.length()) { index ->
+                    val doc = docs.getJSONObject(index)
+                    val file = requireNotNull(entries[doc.getString("archivePath")]) { "Backup original missing" }
+                    val expected = doc.optString("sha256")
+                    if (expected.isNotEmpty()) {
+                        val digest = java.security.MessageDigest.getInstance("SHA-256")
+                        file.inputStream().use { input ->
+                            val buffer = ByteArray(8192)
+                            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+                        }
+                        require(digest.digest().joinToString("") { "%02x".format(it) }.equals(expected, true)) { "Backup checksum mismatch" }
+                    }
+                }
+            }
 
+            val database = HubHelperDatabase.get(context)
+            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(manifest.toString().toByteArray()).joinToString("") { "%02x".format(it) }
+            require(database.businessStateDao().imported(digest) == 0) { "This legacy backup was already imported" }
+            val previousFiles = database.documentDao().getAll().map { it.privatePath }.toSet()
+            try {
+            val result = database.withTransaction {
             val documentIdMap = mutableMapOf<String, String>()
             val documents = manifest.optJSONArray("documents")
             for (index in 0 until (documents?.length() ?: 0)) {
@@ -111,6 +145,8 @@ object BackupImporter {
                     status = AttendanceEventStatus.valueOf(value.getString("status")),
                     note = value.nullableString("note"),
                     sourceDocumentId = oldSource?.let(documentIdMap::get),
+                    sourcePageNumber = if (value.isNull("sourcePageNumber")) null else value.getInt("sourcePageNumber"),
+                    policyVersion = value.nullableString("policyVersion"),
                 )
             }
 
@@ -140,18 +176,21 @@ object BackupImporter {
             val callIns = manifest.optJSONArray("callIns")
             for (index in 0 until (callIns?.length() ?: 0)) {
                 val value = callIns!!.getJSONObject(index)
-                callInRepository.add(LocalDate.parse(value.getString("date")), value.getInt("ptoMinutes"))
+                database.callInDao().insert(app.hubhelper.data.CallInEntity(occurredEpochDay = LocalDate.parse(value.getString("date")).toEpochDay(), ptoMinutes = value.getInt("ptoMinutes"), createdAtEpochMillis = System.currentTimeMillis()))
             }
 
             val bookedPtoDays = manifest.optJSONArray("bookedPtoDays")
             for (index in 0 until (bookedPtoDays?.length() ?: 0)) {
                 val value = bookedPtoDays!!.getJSONObject(index)
                 val oldSource = value.nullableString("sourceDocumentId")
-                bookedPtoRepository.add(
-                    LocalDate.parse(value.getString("date")),
-                    oldSource?.let(documentIdMap::get),
-                    runCatching { BookedTimeType.valueOf(value.optString("type", BookedTimeType.REGULAR_PTO.name)) }.getOrDefault(BookedTimeType.REGULAR_PTO),
-                )
+                database.bookedPtoDao().insert(app.hubhelper.data.BookedPtoEntity(
+                    dateEpochDay = LocalDate.parse(value.getString("date")).toEpochDay(),
+                    sourceDocumentId = oldSource?.let(documentIdMap::get),
+                    usageType = value.optString("type", BookedTimeType.REGULAR_PTO.name),
+                    createdAtEpochMillis = System.currentTimeMillis(),
+                    durationMinutes = if (manifest.optJSONObject("setup")?.optString("shiftPreset") == "SECOND" && value.optString("type", "REGULAR_PTO") == "REGULAR_PTO") 600 else 480,
+                    legacyAssumption = true,
+                ))
             }
 
             val setupJson = manifest.optJSONObject("setup")
@@ -166,9 +205,12 @@ object BackupImporter {
                 callInsRemaining = setupJson.optString("callInsRemaining", currentSetup.callInsRemaining),
                 callInsBalanceYear = setupJson.optString("callInsBalanceYear", currentSetup.callInsBalanceYear),
                 birthdayMonth = setupJson.optString("birthdayMonth", currentSetup.birthdayMonth),
+                paydayAnchor = setupJson.optString("paydayAnchor", currentSetup.paydayAnchor),
                 floatingHolidayAllowance = setupJson.optString("floatingHolidayAllowance", currentSetup.floatingHolidayAllowance),
             )
 
+            SetupStore(database).save(restoredSetup, "legacy backup restore")
+            database.businessStateDao().receipt(ImportReceiptEntity(digest, System.currentTimeMillis()))
             BackupImportResult(
                 setup = restoredSetup,
                 attendanceCount = attendance?.length() ?: 0,
@@ -179,9 +221,18 @@ object BackupImporter {
                 callInCount = callIns?.length() ?: 0,
                 bookedPtoCount = bookedPtoDays?.length() ?: 0,
             )
+            }
+            DatabaseBackup.recover(context)
+            result
+            } catch (error: Throwable) {
+                File(context.filesDir, "documents").listFiles()?.filter { it.absolutePath !in previousFiles }?.forEach { it.delete() }
+                throw error
+            }
         } finally {
             tempDirectory.deleteRecursively()
         }
+    }
+
     }
 
     private fun JSONObject.nullableString(key: String): String? =

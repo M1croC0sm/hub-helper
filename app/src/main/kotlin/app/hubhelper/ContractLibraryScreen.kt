@@ -25,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,7 +46,7 @@ internal data class ReferenceSearchMatch(val referenceIndex: Int, val lineIndex:
 private data class SelectedReference(val referenceIndex: Int, val targetLineIndex: Int? = null)
 
 @Composable
-fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> = emptyList()) {
+fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> = emptyList(), appDate: java.time.LocalDate = java.time.LocalDate.now()) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val references = remember {
@@ -62,10 +63,10 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
             ),
         ).map { reference -> reference to context.assets.open(reference.assetName).bufferedReader().use { it.readText() } }
     }
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     var selectedReference by remember { mutableStateOf<SelectedReference?>(null) }
-    var showSearchResults by remember { mutableStateOf(false) }
-    var showAllHolidays by remember { mutableStateOf(false) }
+    var showSearchResults by rememberSaveable { mutableStateOf(false) }
+    var showAllHolidays by rememberSaveable { mutableStateOf(false) }
     val matches = remember(query, references) { searchReferenceLines(references.map { it.second }, query) }
 
     selectedReference?.let { selected ->
@@ -143,7 +144,7 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
                 if (holidays.isEmpty()) {
                     Text("No reviewed holidays loaded. Add the annual calendar in Documents.")
                 } else {
-                    val next = holidays.firstOrNull { !it.date.isBefore(java.time.LocalDate.now()) } ?: holidays.first()
+                    val next = holidays.firstOrNull { !it.date.isBefore(appDate) } ?: holidays.first()
                     Text("Next plant holiday", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(next.date.monthDayYear(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Text(next.name, style = MaterialTheme.typography.bodyLarge)
@@ -163,14 +164,14 @@ fun ContractLibraryScreen(padding: PaddingValues, holidays: List<PlantHoliday> =
                 ReferenceQna("How do I get started?", "To get started, enter your hire date, shift, balances, call-ins, and current attendance points in setup. You can edit these values later in Settings.")
                 ReferenceQna("How do I record something that happened?", "To record an event, tap LOG, choose the event type, enter the date and details, then save it.")
                 ReferenceQna("How do I scan an attendance sheet?", "To scan an attendance sheet, open Documents, tap Add document, choose Attendance, select all pages, review the detected dates and point changes, then confirm and save.")
-                ReferenceQna("How do I view a saved document?", "To view a saved document, open Documents and tap View document and OCR. Pinch to zoom and drag the image while zoomed.")
-                ReferenceQna("How do I understand point falloff?", "To understand point falloff, open Calendar or Attendance details. Confirmed dated attendance records fall off individually after their rolling period; the manually entered current total remains authoritative.")
+                ReferenceQna("How do I view a saved document?", "To view a saved document, open Documents and tap View document and OCR. Use Previous/Next to browse every page, and pinch to zoom. Read / retry OCR indexes PDFs and images on-device.")
+                ReferenceQna("How do I understand point falloff?", "To understand point falloff, open Calendar or Attendance details. Confirmed dated attendance records fall off individually after their rolling period; statement balances are reconciled through their selected date and later events change the balance.")
                 ReferenceQna("How do I use the calendar?", "To use the calendar, tap Calendar, choose a month, then tap a day to see its events. Use the always-visible legend to understand each symbol and color.")
                 ReferenceQna("How do I search the contract or policy?", "To search the references, enter at least two characters in Search reference and tap GO or the keyboard Search action. Tap a result to open the matching passage.")
                 ReferenceQna("How do I add a company holiday?", "To add a company holiday, scan or select a holiday calendar in Documents and review the detected dates before saving. Contract holidays are generated automatically; scanned calendars can add exceptions.")
                 ReferenceQna("How do I change the theme?", "To change the theme, open Settings, choose Industrial Instrument, Clear & Easy, or Soft & Friendly, then choose Follow system, Light, or Dark.")
                 ReferenceQna("How do I share Hub Helper?", "To share Hub Helper, open Settings and find Share Hub Helper. A coworker can scan the QR code, or you can open, copy, or share the official download-page link.")
-                ReferenceQna("How do I reset the app?", "To reset the app, open Settings, tap Reset app to zero, and confirm. This clears records and documents, zeros balances, and returns to Settings.")
+                ReferenceQna("How do I reset the app?", "To reset the app, open Settings, tap Reset app to zero, and confirm. This clears records, audit history and originals, cancels background work, and returns to first-time setup.")
                 ReferenceQna("How do I protect or back up my data?", "To protect or back up your data, enable app lock in Settings and use Export private backup. Store exported files securely because they are outside the app’s private storage.")
             }
         }

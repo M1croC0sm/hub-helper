@@ -1,5 +1,6 @@
 package app.hubhelper.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -15,5 +16,6 @@ data class AttendanceEventEntity(
     val sourcePageNumber: Int?,
     val policyVersion: String?,
     val createdAtEpochMillis: Long,
+    @ColumnInfo(defaultValue = "''") val stableId: String = java.util.UUID.randomUUID().toString(),
 )
 

@@ -16,6 +16,8 @@ class WorkNoteRepository internal constructor(private val dao: WorkNoteDao) {
         dao.insert(WorkNoteEntity(dateEpochDay = date.toEpochDay(), text = text.trim(), createdAtEpochMillis = System.currentTimeMillis()))
     }
 
+    suspend fun update(note: WorkNote, text: String) { require(text.isNotBlank()); dao.updateText(note.id.toLong(), text.trim()) }
+
     suspend fun delete(note: WorkNote) {
         val id = note.id.toLongOrNull() ?: return
         dao.delete(WorkNoteEntity(id, note.date.toEpochDay(), note.text, 0))

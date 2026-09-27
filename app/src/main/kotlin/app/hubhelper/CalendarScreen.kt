@@ -140,6 +140,7 @@ fun CalendarScreen(
     onDeleteTimeAdjustment: (TimeBalanceAdjustment) -> Unit,
     onDeleteCallIn: (CallInEvent) -> Unit,
     onDeleteBookedPto: (BookedPtoDay) -> Unit,
+    onSetBookingStatus: (BookedPtoDay, app.hubhelper.domain.BookingStatus) -> Unit,
     onDeleteHoliday: (PlantHoliday) -> Unit,
 ) {
     var visibleYear by remember(request) { mutableIntStateOf(request.month?.year ?: appDate.year) }
@@ -243,6 +244,7 @@ fun CalendarScreen(
                     editAttendance = null
                 },
                 onDelete = { deleteMarker = it },
+                onSetBookingStatus = onSetBookingStatus,
                 onLog = {
                     selectedDay = null
                     onLogDate(day)
@@ -255,7 +257,7 @@ fun CalendarScreen(
         AlertDialog(
             onDismissRequest = { deleteMarker = null },
             title = { Text("Remove calendar entry?") },
-            text = { Text("Remove ${marker.title} from ${marker.date.monthDayYear()}? This cannot be undone.") },
+            text = { Text(if (marker.source is MarkerSource.BookedPto) "Cancel this booking? Its automatic deduction is removed. Any explicitly recorded actual usage remains in the ledger." else "Remove ${marker.title} from ${marker.date.monthDayYear()}? Attendance events are retained as rescinded; other removals cannot be undone.") },
             confirmButton = {
                 Button(onClick = {
                     when (val source = marker.source) {
@@ -479,6 +481,7 @@ private fun DayDetails(
     onSaveAttendance: (AttendanceEvent) -> Unit,
     onDelete: (CalendarMarker) -> Unit,
     onLog: () -> Unit,
+    onSetBookingStatus: (BookedPtoDay, app.hubhelper.domain.BookingStatus) -> Unit,
 ) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = HubThemeDesign.tokens.screenPadding).padding(bottom = 24.dp),
@@ -501,10 +504,18 @@ private fun DayDetails(
                             Text(marker.detail, style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                    (marker.source as? MarkerSource.Attendance)?.event?.source?.let { SourceEvidenceButton(it.documentId, it.pageNumber) }
+                    (marker.source as? MarkerSource.BookedPto)?.day?.sourceDocumentId?.let { SourceEvidenceButton(it) }
                     when (val source = marker.source) {
                         is MarkerSource.Attendance -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = { onEdit(source.event) }) { Text("Edit") }
                             OutlinedButton(onClick = { onDelete(marker) }) { Text("Remove") }
+                        }
+                        is MarkerSource.BookedPto -> {
+                            Text("${source.day.status.name.lowercase()} • ${app.hubhelper.domain.displayMinutesAsHours(source.day.durationMinutes)} hours")
+                            if (source.day.legacyAssumption) Text("Legacy duration assumed from setup; review against the original.", style = MaterialTheme.typography.bodySmall)
+                            if (source.day.status == app.hubhelper.domain.BookingStatus.REQUESTED) OutlinedButton(onClick = { onSetBookingStatus(source.day, app.hubhelper.domain.BookingStatus.APPROVED) }) { Text("Mark approved") }
+                            OutlinedButton(onClick = { onDelete(marker) }) { Text("Cancel booking") }
                         }
                         MarkerSource.Derived -> Text("Calculated from dated attendance history", style = MaterialTheme.typography.bodySmall)
                         else -> OutlinedButton(onClick = { onDelete(marker) }) { Text("Remove") }
@@ -648,8 +659,8 @@ private fun attendanceTypeLabel(type: AttendanceEventType): String = when (type)
 }
 
 private fun formatMinutes(minutes: Int, sick: Boolean): String {
-    val hours = BigDecimal(minutes).divide(BigDecimal(60)).stripTrailingZeros().toPlainString()
+    val hours = app.hubhelper.domain.displayMinutesAsHours(minutes)
     if (!sick) return "$hours hours"
-    val days = BigDecimal(minutes).divide(BigDecimal(480)).stripTrailingZeros().toPlainString()
+    val days = BigDecimal(minutes).divide(BigDecimal(480), 4, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
     return "$days ${if (days == "1") "sick day" else "sick days"}"
 }

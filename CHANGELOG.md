@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.0 — reliability and evidence workflows
+
+- Repair backup compatibility, add validated format-7 Merge/Replace, stable record
+  identities, checksums, staging journals, and interrupted-restore recovery.
+- Move business setup into Room with migration/audit history; update call-ins and
+  their allowance transactionally; stop automatic startup duplicate deletion.
+- Fix minute arithmetic; add stored booking durations, partial days, approval and
+  cancellation, linked usage/call-ins, and projected PTO balances.
+- Add end-of-day statement reconciliation, editable/rejectable OCR rows, source
+  identities, and attendance corrections that recalculate contributions.
+- Add complete page viewing, durable PDF/image OCR, page FTS search, source links,
+  deletion tombstones, and note/title editing.
+- Split feature screens, retain write operations and loaded ledger state in
+  ViewModels, preserve simple drafts, and surface write failures.
+- Add migration/restore/booking tests, release-build checks, and artifact manifests.
+
+
 All notable user-facing changes to Hub Helper are recorded here.
 
 ## 0.11.1 — 2026-08-30

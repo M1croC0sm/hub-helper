@@ -15,21 +15,20 @@ are reliable.
 
 ## Project status
 
-The Android/Compose app now includes persistent attendance and time-balance
-data, an interactive year/month calendar, schedule presets, holidays, notes, a private OCR document library,
-offline contract/policy search, reminders, backup export, app lock, and tested
-policy calculations. Its shared Compose UI includes Industrial Instrument,
-Clear & Easy, and Soft & Friendly themes with system, light, and dark modes.
-Automatic 90-day credit timing and full printout-row import
-remain under review.
+Version 0.12.0 adds transactional setup/call-in state, reviewed end-of-day attendance
+reconciliation, durable booking durations and cancellation, linked actual usage,
+PTO projections, multi-page PDF/image viewing, resumable OCR, page search and source
+links, and validated format-7 backup Merge/Replace with recovery journals.
 
-- Product and implementation plan: [`PLAN.md`](PLAN.md)
-- Technical architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- Detailed status and source needs: [`progress.md`](progress.md)
-- Privacy policy: [`PRIVACY.md`](PRIVACY.md)
-- Security reporting: [`SECURITY.md`](SECURITY.md)
-- Public-release readiness: [`OPEN_SOURCE_READINESS.md`](OPEN_SOURCE_READINESS.md)
-- Content and trademark notices: [`NOTICE.md`](NOTICE.md)
+Current backups preserve setup, stable record identity, originals, and page/audit
+metadata. Legacy formats 1–4 and 6 can be imported; undocumented format 5 is rejected.
+Exports are unencrypted. Automatic 90-day credit awards remain deferred.
+
+- Implementation sequence and acceptance gates: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+- Current technical design: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Release and verification notes: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
+- Privacy: [PRIVACY.md](PRIVACY.md)
+- Distribution prerequisites: [OPEN_SOURCE_READINESS.md](OPEN_SOURCE_READINESS.md)
 
 ## Privacy and distribution status
 
@@ -48,7 +47,7 @@ protected production-signing process.
 Requirements: JDK 17 and Android SDK 36.
 
 ```bash
-./gradlew test assembleDebug
+./gradlew test lintDebug assembleDebug assembleRelease
 ```
 
 Install the debug build on a USB-connected device with:
@@ -61,3 +60,13 @@ In the app, open **Settings → Debug date** to enter an ISO date or move one da
 at a time. The override persists across restarts, is clearly shown on Home, and
 can be reset with **Use device date**. The debug menu also includes a point
 falloff preview. Date overriding is disabled in release builds.
+
+Generate a manifest containing APK versions and SHA-256 checksums with:
+
+```bash
+python3 scripts/release_manifest.py
+```
+
+Debug APKs are installable test builds. The release APK is unsigned unless a protected
+production signing process is supplied. The download website is updated only when an
+actual release artifact is published; a local build does not change its download link.

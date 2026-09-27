@@ -8,6 +8,7 @@ data class CallInEvent(
     val id: String,
     val occurredOn: LocalDate,
     val ptoMinutes: Int,
+    val bookingId: String? = null,
 )
 
 fun remainingCallIns(events: List<CallInEvent>, year: Int): Int =

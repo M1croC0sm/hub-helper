@@ -8,7 +8,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface HolidayDao {
-    @Query("SELECT * FROM plant_holidays ORDER BY dateEpochDay")
+    @androidx.room.Update suspend fun update(holiday: HolidayEntity)
+
+    @Query("SELECT * FROM plant_holidays WHERE stableId = :stableId LIMIT 1")
+    suspend fun byStableId(stableId: String): HolidayEntity?
+
+    @Query("SELECT * FROM plant_holidays")
+    suspend fun getAll(): List<HolidayEntity>
+
+    @Query("SELECT * FROM plant_holidays WHERE suppressed = 0 ORDER BY dateEpochDay")
     fun observeAll(): Flow<List<HolidayEntity>>
 
     @Query("SELECT COUNT(*) FROM plant_holidays WHERE dateEpochDay = :dateEpochDay AND lower(name) = lower(:name)")

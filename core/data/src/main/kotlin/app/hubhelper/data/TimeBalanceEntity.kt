@@ -1,5 +1,6 @@
 package app.hubhelper.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -11,5 +12,7 @@ data class TimeBalanceAdjustmentEntity(
     val minutes: Int,
     val note: String?,
     val createdAtEpochMillis: Long,
+    @ColumnInfo(defaultValue = "NULL") val bookingId: String? = null,
+    @ColumnInfo(defaultValue = "''") val stableId: String = java.util.UUID.randomUUID().toString(),
 )
 

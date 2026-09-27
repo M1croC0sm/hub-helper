@@ -11,4 +11,5 @@ data class TimeBalanceAdjustment(
     /** Positive adds time; negative records time used. */
     val minutes: Int,
     val note: String?,
+    val bookingId: String? = null,
 )

@@ -7,12 +7,16 @@ data class ParsedAttendanceRow(
     val comment: String,
     val adjustmentHalfPoints: Int?,
     val runningTotalHalfPoints: Int,
+    val sourcePageNumber: Int? = null,
+    val sourceRowKey: String? = null,
+    val reviewedType: AttendanceEventType? = null,
 )
 
 data class ParsedAttendanceStatement(
     val rows: List<ParsedAttendanceRow>,
     val currentTotalHalfPoints: Int?,
     val warnings: List<String>,
+    val statementDate: LocalDate? = null,
 )
 
 /** Parses both row-oriented OCR and OCR that reads table columns separately. */
@@ -79,7 +83,12 @@ class AttendancePrintoutParser {
             standaloneTotals.lastOrNull() ?: rows.lastOrNull()?.runningTotalHalfPoints
         }
         if (rows.any { it.adjustmentHalfPoints == null }) warnings += "Some row changes need manual review"
-        return ParsedAttendanceStatement(rows, currentTotal, warnings.distinct())
+        val sourcedRows = rows.mapIndexed { index, row ->
+            val candidates = normalizedPages.indices.filter { page -> normalizedPages[page].any { line -> datePattern.find(line)?.groupValues?.get(1)?.let(::parseDate) == row.date } }
+            val page = candidates.singleOrNull() ?: -1
+            row.copy(sourcePageNumber = if (page >= 0) page + 1 else null, sourceRowKey = "row-$index")
+        }
+        return ParsedAttendanceStatement(sourcedRows, currentTotal, warnings.distinct())
     }
 
     private fun parseInlineRow(line: String): ParsedAttendanceRow? {

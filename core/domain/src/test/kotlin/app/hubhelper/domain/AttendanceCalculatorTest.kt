@@ -16,6 +16,19 @@ class AttendanceCalculatorTest {
     }
 
     @Test
+    fun `logged and scanned points follow the same rolling falloff`() {
+        val logged = event("2025-09-04", 1, AttendanceEventStatus.CONFIRMED)
+        val scanned = logged.copy(
+            id = "scanned",
+            source = SourceReference("attendance-sheet", pageNumber = 1, policyVersion = null),
+        )
+
+        assertEquals("1", calculator.summarize(listOf(logged, scanned), date("2026-09-03")).confirmedPoints.asDisplayValue())
+        assertEquals("0", calculator.summarize(listOf(logged, scanned), date("2026-09-04")).confirmedPoints.asDisplayValue())
+        assertEquals(calculator.expiresOn(logged), calculator.expiresOn(scanned))
+    }
+
+    @Test
     fun `half points are summed without floating point arithmetic`() {
         val events = listOf(
             event("2026-01-01", 1, AttendanceEventStatus.CONFIRMED),

@@ -17,6 +17,8 @@ data class SetupData(
     val birthdayMonth: String = "",
     val floatingHolidayAllowance: String = "",
     val paydayAnchor: String = "",
+    val attendanceAsOfDate: String = "",
+    val shiftEffectiveDate: String = "",
 )
 
 class SetupPreferences(context: Context) {

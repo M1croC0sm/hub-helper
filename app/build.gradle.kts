@@ -11,8 +11,8 @@ android {
         applicationId = "app.hubhelper"
         minSdk = 26
         targetSdk = 36
-        versionCode = 40
-        versionName = "0.11.1"
+        versionCode = 41
+        versionName = "0.12.0"
     }
 
     buildTypes {
@@ -26,8 +26,11 @@ android {
         }
     }
 
+    testOptions { unitTests.isIncludeAndroidResources = true }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -50,7 +53,11 @@ tasks.named("preBuild").configure { dependsOn(prepareReferenceAssets) }
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    testImplementation("org.json:json:20240303")
     implementation(libs.androidx.activity.compose)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
@@ -60,5 +67,7 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.biometric)
     testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("androidx.test:core:1.6.1")
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

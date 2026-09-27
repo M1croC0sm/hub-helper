@@ -1,5 +1,10 @@
 # Hub Helper Delivery Plan
 
+For the current reliability fixes, architecture changes, migration strategy, and
+implementation order, see [the September 2026 implementation plan](IMPLEMENTATION_PLAN.md).
+The milestones below describe the original delivery scope; their implementation
+claims should be read alongside the newer plan's assessed gaps and acceptance gates.
+
 ## MVP boundary
 
 The MVP is useful without OCR automation or a language model. It will let one

@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,7 @@ fun InitialSetupScreen(
     var sickBalance by remember(initialData) { mutableStateOf(sickDaysFromHours(initialData.sickBalanceHours)) }
     var currentPoints by remember(initialData) { mutableStateOf(initialData.currentAttendancePoints) }
     var callInsRemaining by remember(initialData) { mutableStateOf(initialData.callInsRemaining) }
+    var shiftEffectiveDate by rememberSaveable { mutableStateOf(runCatching { LocalDate.parse(initialData.shiftEffectiveDate) }.getOrDefault(LocalDate.now())) }
     var shiftPreset by remember(initialData) { mutableStateOf(initialData.shiftPreset) }
     var pointsSheetUris by remember(initialData) {
         mutableStateOf(initialData.pointsSheetUri?.lineSequence()?.filter(String::isNotBlank)?.toList().orEmpty())
@@ -76,8 +78,8 @@ fun InitialSetupScreen(
         if (uris.isNotEmpty()) pointsSheetUris = uris.map(Uri::toString)
     }
 
-    val ptoValid = ptoBalance.isBlank() || ptoBalance.toBigDecimalOrNull()?.let { it.signum() >= 0 } == true
-    val sickValid = sickBalance.isBlank() || sickBalance.toBigDecimalOrNull()?.let { it.signum() >= 0 } == true
+    val ptoValid = ptoBalance.isBlank() || runCatching { app.hubhelper.domain.Minutes.fromHours(ptoBalance).value >= 0 }.getOrDefault(false)
+    val sickValid = sickBalance.isBlank() || runCatching { sickBalance.toBigDecimal().multiply(480.toBigDecimal()).longValueExact() >= 0 }.getOrDefault(false)
     val parsedPoints = currentPoints.toBigDecimalOrNull()
     val pointsValid = currentPoints.isBlank() || parsedPoints?.let {
         it >= (-1).toBigDecimal() && it.remainder("0.5".toBigDecimal()).signum() == 0
@@ -111,6 +113,7 @@ fun InitialSetupScreen(
                         label = { Text("Second shift") },
                     )
                 }
+                DatePickerField("Shift effective from", shiftEffectiveDate, { it?.let { date -> shiftEffectiveDate = date } })
                 DatePickerField("Hire date", hireDate, { selected ->
                     if (selected == null || !selected.isAfter(LocalDate.now())) hireDate = selected
                 }, allowClear = true)
@@ -211,6 +214,7 @@ fun InitialSetupScreen(
                                     pointsSheetUris.joinToString("\n") == initialData.pointsSheetUri
                                 ) initialData.attendanceOpeningRemainder else currentPoints.trim(),
                                 shiftPreset = shiftPreset,
+                                shiftEffectiveDate = shiftEffectiveDate.toString(),
                                 pointsSheetUri = pointsSheetUris.takeIf { it.isNotEmpty() }?.joinToString("\n"),
                                 hireDate = hireDate?.toString().orEmpty(),
                                 balancesAsOfDate = initialData.balancesAsOfDate,
@@ -258,7 +262,7 @@ private fun BalanceField(
         label = { Text(label) },
         placeholder = { Text("Optional") },
         isError = !valid,
-        supportingText = { if (!valid) Text("Enter zero or a positive number") },
+        supportingText = { if (!valid) Text("Enter a nonnegative amount representing whole minutes") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),

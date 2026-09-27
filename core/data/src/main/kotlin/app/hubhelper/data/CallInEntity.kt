@@ -1,5 +1,6 @@
 package app.hubhelper.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -9,4 +10,6 @@ data class CallInEntity(
     val occurredEpochDay: Long,
     val ptoMinutes: Int,
     val createdAtEpochMillis: Long,
+    @ColumnInfo(defaultValue = "NULL") val bookingId: String? = null,
+    @ColumnInfo(defaultValue = "''") val stableId: String = java.util.UUID.randomUUID().toString(),
 )

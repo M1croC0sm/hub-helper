@@ -40,6 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +57,7 @@ import java.io.File
 import java.util.UUID
 import java.util.zip.ZipInputStream
 import java.io.ByteArrayInputStream
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.produceState
@@ -88,6 +92,15 @@ fun DocumentLibraryScreen(
     onDeleteNote: (WorkNote) -> Unit,
 ) {
     val context = LocalContext.current
+    val activity = requireNotNull(androidx.activity.compose.LocalActivity.current) as androidx.fragment.app.FragmentActivity
+    val model = androidx.lifecycle.ViewModelProvider(activity)[DocumentsViewModel::class.java]
+    val repository = remember { DocumentRepository.create(context) }
+    val ocr = remember { DocumentOcr(context, repository) }
+    val scope = androidx.lifecycle.ViewModelProvider(activity)[AppOperations::class.java]
+    var filter by rememberSaveable { mutableStateOf<DocumentCategory?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var requestedPage by remember { mutableStateOf(0) }
+    LaunchedEffect(query, documents) { model.search(query) }
     var category by remember { mutableStateOf<DocumentCategory?>(null) }
     var showAddDocument by remember { mutableStateOf(false) }
     var viewingDocument by remember { mutableStateOf<WorkDocument?>(null) }
@@ -110,7 +123,8 @@ fun DocumentLibraryScreen(
             showCaptureMore = true
         }
     }
-    val visible = documents
+    val matchingIds = model.results.map { it.documentId }.toSet()
+    val visible = documents.filter { (filter == null || it.category == filter) && (query.isBlank() || it.title.contains(query, true) || it.id in matchingIds) }
 
     Column(
         modifier = Modifier
@@ -123,6 +137,19 @@ fun DocumentLibraryScreen(
             onClick = { category = null; showAddDocument = true },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Add document") }
+        OutlinedTextField(query, { query = it }, label = { Text("Search titles and page text") }, modifier = Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            androidx.compose.material3.FilterChip(filter == null, { filter = null }, label = { Text("All categories") })
+            DocumentCategory.entries.forEach { option -> androidx.compose.material3.FilterChip(filter == option, { filter = option }, label = { Text(friendlyCategory(option)) }) }
+        }
+        model.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        model.results.forEach { result ->
+            documents.firstOrNull { it.id == result.documentId && !it.originalDeleted }?.let { document ->
+                TextButton(onClick = { requestedPage = result.pageNumber - 1; viewingDocument = document }) {
+                    Text("${document.title} • Page ${result.pageNumber}: ${result.text.take(160)}")
+                }
+            }
+        }
         Text("Saved documents", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (visible.isEmpty()) Text(if (documents.isEmpty()) "No documents added yet." else "Nothing matched your search.")
         visible.forEach { document ->
@@ -130,7 +157,15 @@ fun DocumentLibraryScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(document.title, fontWeight = FontWeight.SemiBold)
                     Text("${friendlyCategory(document.category)} • ${friendlyTextStatus(document)}")
-                    OutlinedButton(onClick = { viewingDocument = document }, modifier = Modifier.fillMaxWidth()) { Text("VIEW DOCUMENT AND OCR") }
+                    OutlinedButton(onClick = { requestedPage = 0; viewingDocument = document }, modifier = Modifier.fillMaxWidth()) { Text("VIEW DOCUMENT AND OCR") }
+                    if (document.originalDeleted) Text("Original deleted. Linked records keep this source identity.")
+                    else Row {
+                        TextButton(onClick = { ocr.enqueue(document) }) { Text("Read / retry OCR") }
+                        TextButton(onClick = { ocr.cancel(document) }) { Text("Cancel OCR") }
+                    }
+                    var title by rememberSaveable(document.id) { mutableStateOf(document.title) }
+                    OutlinedTextField(title, { title = it }, label = { Text("Document title") })
+                    TextButton(onClick = { scope.launch { repository.rename(document.id, title) } }, enabled = title.isNotBlank() && title != document.title) { Text("Save title") }
                     val recognizedText = document.ocrText
                     if (!recognizedText.isNullOrBlank()) {
                         OutlinedButton(onClick = {
@@ -140,7 +175,7 @@ fun DocumentLibraryScreen(
                         if (document.category == DocumentCategory.ATTENDANCE) {
                             val parsed = remember(recognizedText) { AttendancePrintoutParser().parse(recognizedText) }
                             Text("${parsed.rows.size} dated attendance rows recognized. These become permanent calendar records.")
-                            Text("Current points remain manually controlled in Settings.", fontWeight = FontWeight.SemiBold)
+                            Text("Review the statement date, balance, and detected rows before reconciliation.", fontWeight = FontWeight.SemiBold)
                             parsed.rows.filter { it.adjustmentHalfPoints != null && it.adjustmentHalfPoints != 0 }.forEach { row ->
                                 Text(
                                     "${row.date.monthDayYear()}  •  change ${HalfPoints(row.adjustmentHalfPoints!!).asDisplayValue()}  •  total ${HalfPoints(row.runningTotalHalfPoints).asDisplayValue()}",
@@ -213,11 +248,15 @@ fun DocumentLibraryScreen(
             onClick = { onAddNote(appDate, noteText); noteText = "" },
             enabled = noteText.isNotBlank(),
         ) { Text("Save note") }
-        notes.forEach { note ->
+        var noteQuery by rememberSaveable { mutableStateOf("") }
+        OutlinedTextField(noteQuery, { noteQuery = it }, label = { Text("Search work notes") })
+        notes.filter { noteQuery.isBlank() || it.text.contains(noteQuery, true) || it.date.toString().contains(noteQuery) }.forEach { note ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(note.date.toString(), style = MaterialTheme.typography.labelLarge)
-                    Text(note.text)
+                    var draft by rememberSaveable(note.id) { mutableStateOf(note.text) }
+                    OutlinedTextField(draft, { draft = it }, label = { Text("Note") })
+                    TextButton(onClick = { scope.launch { app.hubhelper.data.WorkNoteRepository.create(context).update(note, draft) } }, enabled = draft.isNotBlank() && draft != note.text) { Text("Save note changes") }
                     OutlinedButton(onClick = { noteDeleteCandidate = note }) { Text("Delete note") }
                 }
             }
@@ -264,7 +303,7 @@ fun DocumentLibraryScreen(
     }
 
     viewingDocument?.let { document ->
-        DocumentViewerDialog(document = document, onDismiss = { viewingDocument = null })
+        DocumentViewerDialog(document = document, initialPage = requestedPage, onDismiss = { viewingDocument = null })
     }
 
     if (showCaptureMore) {
@@ -290,10 +329,14 @@ fun DocumentLibraryScreen(
     }
 
     deleteCandidate?.let { document ->
+        val attendanceLinks by produceState(0, document.id) {
+            value = app.hubhelper.data.HubHelperDatabase.get(context).attendanceDao().getAll().count { it.sourceDocumentId == document.id }
+        }
+        val bookingLinks = bookedPtoDays.count { it.sourceDocumentId == document.id }
         AlertDialog(
             onDismissRequest = { deleteCandidate = null },
             title = { Text("Delete original document?") },
-            text = { Text("This permanently removes the saved original and any detected text. This cannot be undone.") },
+            text = { Text("This source supports $attendanceLinks attendance records and $bookingLinks bookings. This permanently removes the original and detected text. Attendance and booked-time records keep the source identity and will show that the original is unavailable. This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(document)
@@ -317,10 +360,12 @@ fun DocumentLibraryScreen(
     attendancePreview?.let { (document, parsed) ->
         AttendanceImportPreviewDialog(
             parsed = parsed,
+            calculationDate = appDate,
+            sourceDocumentId = document.id,
             manualTotal = null,
             onDismiss = { attendancePreview = null },
-            onConfirm = {
-                onApplyAttendanceStatement(document, parsed)
+            onConfirm = { reviewed ->
+                onApplyAttendanceStatement(document, reviewed)
                 attendancePreview = null
             },
         )
@@ -332,9 +377,33 @@ fun AttendanceImportPreviewDialog(
     parsed: ParsedAttendanceStatement,
     manualTotal: String?,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
+    onConfirm: (ParsedAttendanceStatement) -> Unit,
+    sourceDocumentId: String? = null,
+    calculationDate: LocalDate = LocalDate.now(),
 ) {
     val rows = parsed.rows.filter { it.adjustmentHalfPoints != null && it.adjustmentHalfPoints != 0 }
+    var accepted by remember(parsed) { mutableStateOf(rows.map { true }) }
+    var edits by remember(parsed) { mutableStateOf(rows) }
+    var statementDate by remember(parsed) { mutableStateOf(parsed.statementDate ?: calculationDate) }
+    var totalText by remember(parsed, manualTotal) { mutableStateOf(manualTotal ?: parsed.currentTotalHalfPoints?.let(::HalfPoints)?.asDisplayValue().orEmpty()) }
+    val totalHalf = runCatching { totalText.toBigDecimal().multiply(2.toBigDecimal()).intValueExact() }.getOrNull()
+    val context = LocalContext.current
+    val existing by produceState<List<app.hubhelper.domain.AttendanceEvent>?>(null) {
+        value = app.hubhelper.data.AttendanceRepository.create(context).allEvents()
+    }
+    val storedSetup by produceState<SetupData?>(null) {
+        value = SetupStore(app.hubhelper.data.HubHelperDatabase.get(context)).read() ?: SetupData()
+    }
+    val opening = storedSetup?.attendanceOpeningRemainder?.toBigDecimalOrNull()?.multiply(2.toBigDecimal())?.toInt() ?: 0
+    val calculated = existing?.let { app.hubhelper.domain.AttendanceCalculator().totalWithOpening(it, statementDate, HalfPoints(opening)).value }
+    val validRows = edits.indices.all { index ->
+        if (!accepted[index]) true else {
+            val row = edits[index]
+            val amount = row.adjustmentHalfPoints
+            amount != null && amount != 0 && amount.toLong() in -10000L..10000L && !row.date.isAfter(statementDate) &&
+                (row.reviewedType == null || (row.reviewedType == app.hubhelper.domain.AttendanceEventType.ATTENDANCE_CREDIT) == (amount < 0))
+        }
+    }
     val detectedTotal = parsed.currentTotalHalfPoints?.let(::HalfPoints)?.asDisplayValue()
     val totalMismatch = manualTotal?.toBigDecimalOrNull()?.let { entered ->
         detectedTotal?.toBigDecimalOrNull()?.compareTo(entered) != 0
@@ -347,14 +416,44 @@ fun AttendanceImportPreviewDialog(
                 Text("We found ${rows.size} dated row${if (rows.size == 1) "" else "s"}. Only the rows below will be saved.")
                 if (detectedTotal != null) Text("Detected sheet total: $detectedTotal", fontWeight = FontWeight.SemiBold)
                 if (manualTotal != null && totalMismatch) {
-                    Text("Your entered total is $manualTotal. The sheet total does not match, so your entered total will be kept.", color = MaterialTheme.colorScheme.error)
+                    Text("Your entered total is $manualTotal. The sheet total does not match. Verify the reported balance below before saving.", color = MaterialTheme.colorScheme.error)
                 }
+                DatePickerField("Statement balance through date", statementDate, { it?.let { value -> statementDate = value } })
+                OutlinedTextField(totalText, { totalText = it }, label = { Text("Reported balance to reconcile") }, isError = totalHalf == null)
+                Text("This records the reported balance through the selected date. Later events and future expirations change that balance. Undated remainder has no known expiration.")
+                if (calculated != null && storedSetup != null) {
+                    Text("Current calculated balance at that date: ${HalfPoints(calculated).asDisplayValue()}")
+                    totalHalf?.let { Text("Reported minus calculated: ${HalfPoints(it - calculated).asDisplayValue()} points. Saving reconciles the remainder after adding the accepted rows.") }
+                }
+                if (statementDate.isAfter(calculationDate)) Text("Statement date cannot be in the future.", color = MaterialTheme.colorScheme.error)
+                if (!validRows) Text("Accepted rows need a nonzero half-point amount, a matching charge/credit type, and a date on or before the statement date.", color = MaterialTheme.colorScheme.error)
                 if (rows.isEmpty()) Text("No complete point rows were found. Nothing will be saved.")
-                rows.forEach { row ->
-                    val change = HalfPoints(row.adjustmentHalfPoints!!).asDisplayValue()
+                edits.forEachIndexed { index, row ->
+                    val change = row.adjustmentHalfPoints?.let(::HalfPoints)?.asDisplayValue().orEmpty()
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(10.dp)) {
-                            Text(row.date.monthDayYear(), fontWeight = FontWeight.SemiBold)
+                            Row {
+                                androidx.compose.material3.Checkbox(accepted[index], { checked -> accepted = accepted.toMutableList().also { it[index] = checked } })
+                                Text("Include row • Page ${row.sourcePageNumber ?: "unknown"}")
+                            }
+                            val overlaps = existing.orEmpty().filter { it.occurredOn == row.date && it.points.value.toLong() == kotlin.math.abs((row.adjustmentHalfPoints ?: 0).toLong()) }
+                            if (overlaps.isNotEmpty()) Text("Review possible overlap: ${overlaps.size} existing record(s) have this date and amount. Uncheck this row if it describes an event already recorded from another source.", color = MaterialTheme.colorScheme.error)
+                            sourceDocumentId?.let { SourceEvidenceButton(it, row.sourcePageNumber) }
+                            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                                app.hubhelper.domain.AttendanceEventType.entries.forEach { type ->
+                                    androidx.compose.material3.FilterChip(row.reviewedType == type, {
+                                        val amount = row.adjustmentHalfPoints?.let { if (type == app.hubhelper.domain.AttendanceEventType.ATTENDANCE_CREDIT) -kotlin.math.abs(it) else kotlin.math.abs(it) }
+                                        edits = edits.toMutableList().also { it[index] = row.copy(reviewedType = type, adjustmentHalfPoints = amount) }
+                                    }, label = { Text(type.name.lowercase().replace('_', ' ')) })
+                                }
+                            }
+                            DatePickerField("Event date", row.date, { date -> date?.let { edits = edits.toMutableList().also { list -> list[index] = row.copy(date = date) } } })
+                            var changeText by remember(row.sourceRowKey, row.reviewedType) { mutableStateOf(change) }
+                            OutlinedTextField(changeText, { text ->
+                                changeText = text
+                                val half = runCatching { text.toBigDecimal().multiply(2.toBigDecimal()).intValueExact() }.getOrNull()
+                                edits = edits.toMutableList().also { it[index] = row.copy(adjustmentHalfPoints = half) }
+                            }, label = { Text("Point change (negative for credit)") })
                             Text("Point change: $change   •   Running total: ${HalfPoints(row.runningTotalHalfPoints).asDisplayValue()}")
                             if (row.comment.isNotBlank()) Text(row.comment, style = MaterialTheme.typography.bodySmall)
                         }
@@ -364,102 +463,55 @@ fun AttendanceImportPreviewDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm, enabled = rows.isNotEmpty()) { Text("Confirm and save") }
+            Button(onClick = { onConfirm(parsed.copy(rows = edits.filterIndexed { i, _ -> accepted[i] }, currentTotalHalfPoints = totalHalf, statementDate = statementDate)) },
+                enabled = totalHalf != null && totalHalf in -2..10000 && existing != null && storedSetup != null && !statementDate.isAfter(calculationDate) && edits.indices.any { accepted[it] } && validRows) { Text("Reconcile and save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
 @Composable
-private fun DocumentViewerDialog(document: WorkDocument, onDismiss: () -> Unit) {
-    val bitmap by produceState<Bitmap?>(initialValue = null, document) {
-        value = withContext(Dispatchers.IO) { loadDocumentPreview(document) }
+internal fun DocumentViewerDialog(document: WorkDocument, initialPage: Int = 0, onDismiss: () -> Unit) {
+    var page by remember(document.id) { mutableStateOf(initialPage) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val count by produceState(0, document) {
+        value = withContext(Dispatchers.IO) { runCatching { DocumentPages.count(document) }.getOrElse { error = it.message; 0 } }
     }
-    var scale by remember(document) { mutableFloatStateOf(1f) }
-    var offsetX by remember(document) { mutableFloatStateOf(0f) }
-    var offsetY by remember(document) { mutableFloatStateOf(0f) }
+    val bitmap by produceState<Bitmap?>(null, document, page) {
+        value = null
+        value = withContext(Dispatchers.IO) { runCatching { DocumentPages.render(document, page) }.getOrElse { error = it.message; null } }
+    }
+    val context = LocalContext.current
+    val pageText by produceState<String?>(null, document, page) {
+        value = app.hubhelper.data.HubHelperDatabase.get(context).documentPageDao().pages(document.id).firstOrNull { it.pageNumber == page + 1 }?.text
+    }
+    var scale by remember(page) { mutableFloatStateOf(1f) }
+    var offsetX by remember(page) { mutableFloatStateOf(0f) }
+    var offsetY by remember(page) { mutableFloatStateOf(0f) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(8.dp)) {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(document.title, style = MaterialTheme.typography.titleLarge)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(document.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = { page-- }, enabled = page > 0) { Text("Previous") }
+                    Text("${if(count == 0) 0 else page + 1} / $count")
+                    TextButton(onClick = { page++ }, enabled = page + 1 < count) { Text("Next") }
                     TextButton(onClick = onDismiss) { Text("Close") }
                 }
-                Text(friendlyCategory(document.category), style = MaterialTheme.typography.labelLarge)
-                if (bitmap != null) {
-                    Box(Modifier.fillMaxWidth().weight(1f).clip(MaterialTheme.shapes.medium)) {
-                        androidx.compose.foundation.Image(
-                            bitmap = bitmap!!.asImageBitmap(),
-                            contentDescription = "Original document page. Pinch or drag to zoom.",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY).pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(1f, 5f)
-                                    offsetX += pan.x
-                                    offsetY += pan.y
-                                }
-                            },
-                        )
-                    }
-                    Text("Pinch or drag to zoom • zoom ${"%.1f".format(scale)}×", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    Text("This document preview is not available, but the original file is saved securely on this device.")
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (bitmap != null) Box(Modifier.fillMaxWidth().weight(1f).clip(MaterialTheme.shapes.medium)) {
+                    androidx.compose.foundation.Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = "Original page ${page + 1}", contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY).pointerInput(page) {
+                            detectTransformGestures { _, pan, zoom, _ -> scale = (scale * zoom).coerceIn(1f, 5f); offsetX += pan.x; offsetY += pan.y }
+                        })
                 }
-                HorizontalDivider()
-                Text("Detected text", fontWeight = FontWeight.SemiBold)
+                Text("Page text", fontWeight = FontWeight.SemiBold)
                 Column(Modifier.weight(0.65f).verticalScroll(rememberScrollState())) {
-                    Text(document.ocrText?.takeIf(String::isNotBlank) ?: "OCR text is not available yet.")
+                    Text(pageText ?: "Page text has not been indexed. Use Read / retry OCR.")
                 }
             }
         }
     }
-}
-
-private fun loadDocumentPreview(document: WorkDocument): Bitmap? = runCatching {
-    val file = File(document.privatePath)
-    when {
-        document.mimeType == DocumentRepository.MULTI_PAGE_MIME -> ZipInputStream(file.inputStream()).use { zip ->
-            var entry = zip.nextEntry
-            while (entry != null) {
-                if (!entry.isDirectory) return@use decodeOriented(zip.readBytes())
-                entry = zip.nextEntry
-            }
-            null
-        }
-        document.mimeType == "application/pdf" || file.extension.equals("pdf", ignoreCase = true) -> {
-            PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
-                if (renderer.pageCount == 0) null else renderer.openPage(0).use { page ->
-                    Bitmap.createBitmap(page.width * 2, page.height * 2, Bitmap.Config.ARGB_8888).also { bitmap ->
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    }
-                }
-            }
-        }
-        else -> decodeOriented(file.readBytes())
-    }
-}.getOrNull()
-
-private fun decodeOriented(bytes: ByteArray): Bitmap? {
-    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
-    val orientation = runCatching { ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
-        .getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-    val matrix = Matrix().apply {
-        when (orientation) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
-            ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
-        }
-    }
-    return if (matrix.isIdentity) bitmap else Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also {
-        if (it !== bitmap) bitmap.recycle()
-    }
-}
-
-private fun newCameraUri(context: Context): Uri {
-    val file = File(context.cacheDir, "camera-captures/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
-    return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
 }
 
 private fun friendlyCategory(category: DocumentCategory): String = when (category) {
@@ -488,4 +540,19 @@ private fun friendlyTextStatus(document: WorkDocument): String = when (document.
     "FAILED" -> "could not read text"
     "UNSUPPORTED" -> "saved original"
     else -> "waiting to read text"
+}
+
+private fun newCameraUri(context: Context): Uri {
+    val file = File(context.cacheDir, "camera-captures/${UUID.randomUUID()}.jpg").apply { parentFile?.mkdirs() }
+    return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+}
+
+@Composable
+internal fun SourceEvidenceButton(documentId: String, pageNumber: Int? = null) {
+    val context = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    val document by produceState<WorkDocument?>(null, documentId) { value = DocumentRepository.create(context).get(documentId) }
+    if (document?.originalDeleted == true) Text("Source original deleted • $documentId", style = MaterialTheme.typography.bodySmall)
+    else TextButton(onClick = { open = true }, enabled = document != null) { Text(if (document == null) "Source unavailable" else "Open evidence${pageNumber?.let { " • page $it" }.orEmpty()}") }
+    if (open) document?.let { DocumentViewerDialog(it, (pageNumber ?: 1) - 1) { open = false } }
 }

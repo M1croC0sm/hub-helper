@@ -15,5 +15,6 @@ data class DocumentEntity(
     val sha256: String,
     val ocrText: String?,
     val ocrStatus: String,
+    @androidx.room.ColumnInfo(defaultValue = "0") val originalDeleted: Boolean = false,
 )
 

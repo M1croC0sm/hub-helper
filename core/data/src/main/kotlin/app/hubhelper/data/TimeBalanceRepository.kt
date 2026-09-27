@@ -1,13 +1,14 @@
 package app.hubhelper.data
 
 import android.content.Context
+import androidx.room.withTransaction
 import app.hubhelper.domain.TimeBalanceAdjustment
 import app.hubhelper.domain.TimeBalanceKind
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class TimeBalanceRepository internal constructor(private val dao: TimeBalanceDao) {
+class TimeBalanceRepository internal constructor(private val dao: TimeBalanceDao, private val database: HubHelperDatabase) {
     val adjustments: Flow<List<TimeBalanceAdjustment>> = dao.observeAll().map { rows ->
         rows.map { row ->
             TimeBalanceAdjustment(
@@ -16,17 +17,25 @@ class TimeBalanceRepository internal constructor(private val dao: TimeBalanceDao
                 kind = TimeBalanceKind.valueOf(row.kind),
                 minutes = row.minutes,
                 note = row.note,
+                bookingId = row.bookingId,
             )
         }
     }
 
-    suspend fun add(date: LocalDate, kind: TimeBalanceKind, minutes: Int, note: String?) {
+    suspend fun add(date: LocalDate, kind: TimeBalanceKind, minutes: Int, note: String?, bookingId: String? = null) = database.withTransaction {
+        if (bookingId != null) {
+            val booking = requireNotNull(database.bookedPtoDao().byStableId(bookingId)) { "Booking no longer exists" }
+            require(kind == TimeBalanceKind.PTO && minutes < 0 && booking.dateEpochDay == date.toEpochDay() && booking.usageType == "REGULAR_PTO" && booking.bookingStatus != "CANCELLED") { "Usage does not match booking" }
+            require(dao.getAll().none { it.bookingId == bookingId } && database.callInDao().getAll().none { it.bookingId == bookingId }) { "This booking already has recorded usage" }
+            database.bookedPtoDao().setStatus(booking.id, "TAKEN")
+        }
         dao.insert(
             TimeBalanceAdjustmentEntity(
                 occurredEpochDay = date.toEpochDay(),
                 kind = kind.name,
                 minutes = minutes,
                 note = note?.trim()?.takeIf(String::isNotEmpty),
+                bookingId = bookingId,
                 createdAtEpochMillis = System.currentTimeMillis(),
             ),
         )
@@ -48,7 +57,7 @@ class TimeBalanceRepository internal constructor(private val dao: TimeBalanceDao
 
     companion object {
         fun create(context: Context): TimeBalanceRepository =
-            TimeBalanceRepository(HubHelperDatabase.get(context).timeBalanceDao())
+            TimeBalanceRepository(HubHelperDatabase.get(context).timeBalanceDao(), HubHelperDatabase.get(context))
     }
 }
 
