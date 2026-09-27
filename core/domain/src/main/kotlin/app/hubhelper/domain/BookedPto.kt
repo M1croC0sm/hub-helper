@@ -20,7 +20,6 @@ data class BookedPtoDay(
 data class UpcomingPtoSummary(
     val bookingCount: Int,
     val minutes: Minutes,
-    val nextDate: LocalDate?,
     val throughDate: LocalDate?,
 )
 
@@ -39,10 +38,13 @@ fun upcomingApprovedPto(
         minutes = Minutes(approved.sumOf {
             (it.durationMinutes.takeIf { duration -> duration > 0 } ?: defaultDurationMinutes).toLong()
         }),
-        nextDate = approved.minOfOrNull { it.date },
         throughDate = approved.maxOfOrNull { it.date },
     )
 }
+
+fun nextApprovedTimeOff(days: List<BookedPtoDay>, asOf: LocalDate): BookedPtoDay? =
+    days.filter { !it.date.isBefore(asOf) && it.status == BookingStatus.APPROVED }
+        .minByOrNull { it.date }
 
 fun remainingFloatingHolidays(
     adjustments: List<TimeBalanceAdjustment>,

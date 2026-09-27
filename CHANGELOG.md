@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.3 — next time off at a glance
+
+- Show the next approved PTO or floating-holiday booking together with the next
+  plant holiday in one **Next time off** dashboard panel.
+- Open the combined calendar at the earliest of those two dates when the panel
+  is selected.
+
 ## 0.12.2 — clearer time-off dashboard
 
 - Combine current PTO, approved upcoming PTO, post-booking PTO, floating

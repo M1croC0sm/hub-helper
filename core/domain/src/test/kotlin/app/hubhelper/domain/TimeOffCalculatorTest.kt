@@ -90,8 +90,24 @@ class TimeOffCalculatorTest {
 
         assertEquals(2, summary.bookingCount)
         assertEquals(Minutes(900), summary.minutes)
-        assertEquals(today.plusDays(2), summary.nextDate)
         assertEquals(today.plusDays(4), summary.throughDate)
+    }
+
+    @Test fun `next approved time off includes floating bookings and ignores requests`() {
+        val today = LocalDate.of(2026, 9, 27)
+        val floating = BookedPtoDay(
+            "floating",
+            today.plusDays(3),
+            type = BookedTimeType.ANYTIME_FLOATING,
+        )
+        val days = listOf(
+            BookedPtoDay("past", today.minusDays(1)),
+            BookedPtoDay("request", today.plusDays(1), status = BookingStatus.REQUESTED),
+            floating,
+            BookedPtoDay("later", today.plusDays(4)),
+        )
+
+        assertEquals(floating, nextApprovedTimeOff(days, today))
     }
 
     @Test fun `booked PTO deducts the shift day when its date arrives`() {

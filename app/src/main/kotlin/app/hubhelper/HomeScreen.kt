@@ -77,6 +77,7 @@ internal fun HomeScreen(
     val ptoBalance = balance(app.hubhelper.domain.TimeBalanceKind.PTO, setupData.ptoBalanceHours)
     val sickBalance = balance(app.hubhelper.domain.TimeBalanceKind.SICK, setupData.sickBalanceHours)
     val nextHoliday = holidays.firstOrNull { !it.date.isBefore(appDate) }
+    val nextBookedTimeOff = app.hubhelper.domain.nextApprovedTimeOff(bookedPtoDays, appDate)
     val risk = when (app.hubhelper.domain.attendanceColorBand(total)) {
         app.hubhelper.domain.AttendanceColorBand.RED -> Triple("HIGH RISK", "Attendance points above five", MaterialTheme.colorScheme.error)
         app.hubhelper.domain.AttendanceColorBand.ORANGE -> Triple("WATCH", "Review upcoming changes", design.attention)
@@ -222,12 +223,36 @@ internal fun HomeScreen(
             Modifier
                 .fillMaxWidth()
                 .clickable {
+                    val nextDate = listOfNotNull(nextBookedTimeOff?.date, nextHoliday?.date).minOrNull() ?: appDate
                     onViewCalendar(
-                        CalendarRequest(nextHoliday?.date?.let(YearMonth::from) ?: YearMonth.from(appDate), CalendarFilter.HOLIDAY),
+                        CalendarRequest(YearMonth.from(nextDate), CalendarFilter.ALL),
                     )
                 },
         ) {
-            SectionLabel("Next plant holiday", color = design.attention)
+            SectionLabel("Next time off")
+            Spacer(Modifier.height(8.dp))
+            SectionLabel("Booked time off", color = design.pto)
+            if (nextBookedTimeOff == null) {
+                Text("No approved time off booked", style = MaterialTheme.typography.titleMedium)
+            } else {
+                Text(nextBookedTimeOff.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.pto)
+                Text(
+                    when (nextBookedTimeOff.type) {
+                        app.hubhelper.domain.BookedTimeType.REGULAR_PTO -> {
+                            val minutes = nextBookedTimeOff.durationMinutes.takeIf { it > 0 } ?: ptoWarningAt * 60
+                            "${app.hubhelper.domain.Minutes(minutes.toLong()).displayHours()} PTO hours"
+                        }
+                        app.hubhelper.domain.BookedTimeType.BIRTHDAY_FLOATING -> "Birthday floating holiday"
+                        app.hubhelper.domain.BookedTimeType.ANYTIME_FLOATING -> "Anytime floating holiday"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            Spacer(Modifier.height(13.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+            Spacer(Modifier.height(13.dp))
+            SectionLabel("Plant holiday", color = design.attention)
             if (nextHoliday == null) {
                 Text("No reviewed holiday loaded", style = MaterialTheme.typography.titleMedium)
                 Text("Add the annual plant calendar in Documents.", style = MaterialTheme.typography.bodySmall)
@@ -237,6 +262,8 @@ internal fun HomeScreen(
                     Text(nextHoliday.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.attention)
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            Text("OPEN CALENDAR  ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
 
         HubPanel(
@@ -328,9 +355,6 @@ internal fun TimeOffPanel(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                upcomingPto.nextDate?.let {
-                    Text("Next: ${it.monthDayYear()}", style = MaterialTheme.typography.bodySmall)
-                }
             }
         }
         if (largeFont) {
