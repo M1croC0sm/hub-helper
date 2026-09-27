@@ -65,6 +65,35 @@ class TimeOffCalculatorTest {
         assertEquals(5, remainingCallIns(events, 2027))
     }
 
+    @Test fun `call in color bands show increasing urgency`() {
+        assertEquals(CallInColorBand.GREEN, callInColorBand(5))
+        assertEquals(CallInColorBand.GREEN, callInColorBand(4))
+        assertEquals(CallInColorBand.ORANGE, callInColorBand(3))
+        assertEquals(CallInColorBand.ORANGE, callInColorBand(2))
+        assertEquals(CallInColorBand.RED, callInColorBand(1))
+        assertEquals(CallInColorBand.RED, callInColorBand(0))
+    }
+
+    @Test fun `upcoming PTO summary includes only future approved regular bookings`() {
+        val today = LocalDate.of(2026, 9, 27)
+        val days = listOf(
+            BookedPtoDay("past", today.minusDays(1), durationMinutes = 600),
+            BookedPtoDay("today", today, durationMinutes = 600),
+            BookedPtoDay("approved", today.plusDays(2), durationMinutes = 300),
+            BookedPtoDay("legacy-duration", today.plusDays(4)),
+            BookedPtoDay("requested", today.plusDays(5), durationMinutes = 600, status = BookingStatus.REQUESTED),
+            BookedPtoDay("cancelled", today.plusDays(6), durationMinutes = 600, status = BookingStatus.CANCELLED),
+            BookedPtoDay("floating", today.plusDays(7), type = BookedTimeType.ANYTIME_FLOATING, durationMinutes = 480),
+        )
+
+        val summary = upcomingApprovedPto(days, today, defaultDurationMinutes = 600)
+
+        assertEquals(2, summary.bookingCount)
+        assertEquals(Minutes(900), summary.minutes)
+        assertEquals(today.plusDays(2), summary.nextDate)
+        assertEquals(today.plusDays(4), summary.throughDate)
+    }
+
     @Test fun `booked PTO deducts the shift day when its date arrives`() {
         val booking = BookedPtoDay("1", LocalDate.of(2026, 8, 20))
         val before = TimeOffCalculator.balanceHours(

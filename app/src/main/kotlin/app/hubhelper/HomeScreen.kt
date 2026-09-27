@@ -16,12 +16,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
@@ -159,49 +155,30 @@ internal fun HomeScreen(
             }
         }
 
-        var projectionDate by rememberSaveable { mutableStateOf(appDate.plusMonths(1)) }
-        val reserved = bookedPtoDays.filter { it.date.isAfter(appDate) && !it.date.isAfter(projectionDate) && it.type == app.hubhelper.domain.BookedTimeType.REGULAR_PTO && it.status == app.hubhelper.domain.BookingStatus.APPROVED }
-            .sumOf { it.durationMinutes.toLong() }
-        HubPanel(Modifier.fillMaxWidth()) {
-            SectionLabel("PTO projection")
-            DatePickerField("Project through", projectionDate, { it?.let { date -> projectionDate = date } })
-            Text("Available now: $ptoBalance hours")
-            Text("Approved bookings through this date: ${app.hubhelper.domain.Minutes(reserved).displayHours()} hours")
-            Text("Projected balance: ${balance(app.hubhelper.domain.TimeBalanceKind.PTO, setupData.ptoBalanceHours, projectionDate)} hours")
-            Text("Approved bookings deduct on their dates. Requested or cancelled bookings do not. Annual reset rules are included.", style = MaterialTheme.typography.bodySmall)
-        }
         val ptoWarningAt = if (setupData.shiftPreset == "SECOND") 10 else 8
         val ptoColor = if (TimeOffCalculator.isAtOrBelowOnePtoDay(ptoBalance, ptoWarningAt)) design.attention else design.pto
         val floatingRemaining = app.hubhelper.domain.remainingFloatingHolidays(
             timeAdjustments, bookedPtoDays, appDate, setupData.floatingHolidayAllowance.toIntOrNull() ?: 0,
         )
-        if (!largeFont) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
-            BalancePanel(
-                "PTO hours", ptoBalance, "HRS", ptoColor, Modifier.weight(1f),
-                { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.PTO)) },
-                supporting = "As of ${appDate.monthDayYear()}",
-                footer = "$floatingRemaining floating • opening ${setupData.ptoBalanceHours.ifBlank { "0" }} hrs",
-            )
-            BalancePanel(
-                "Sick hours", sickBalance, "HRS", design.sick, Modifier.weight(1f),
-                onClick = { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.SICK)) },
-                supporting = "As of ${appDate.monthDayYear()}",
-                footer = "opening ${setupData.sickBalanceHours.ifBlank { "0" }} hrs",
-            )
-        } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
-            BalancePanel(
-                "PTO hours", ptoBalance, "HRS", ptoColor, Modifier.fillMaxWidth(),
-                { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.PTO)) },
-                supporting = "As of ${appDate.monthDayYear()}",
-                footer = "$floatingRemaining floating • opening ${setupData.ptoBalanceHours.ifBlank { "0" }} hrs",
-            )
-            BalancePanel(
-                "Sick hours", sickBalance, "HRS", design.sick, Modifier.fillMaxWidth(),
-                onClick = { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.SICK)) },
-                supporting = "As of ${appDate.monthDayYear()}",
-                footer = "opening ${setupData.sickBalanceHours.ifBlank { "0" }} hrs",
-            )
-        }
+        val upcomingPto = app.hubhelper.domain.upcomingApprovedPto(
+            bookedPtoDays,
+            appDate,
+            defaultDurationMinutes = ptoWarningAt * 60,
+        )
+        val afterBookingsBalance = upcomingPto.throughDate?.let {
+            balance(app.hubhelper.domain.TimeBalanceKind.PTO, setupData.ptoBalanceHours, it)
+        } ?: ptoBalance
+        TimeOffPanel(
+            ptoBalance = ptoBalance,
+            afterBookingsBalance = afterBookingsBalance,
+            upcomingPto = upcomingPto,
+            floatingRemaining = floatingRemaining,
+            sickBalance = sickBalance,
+            ptoColor = ptoColor,
+            sickColor = design.sick,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { onViewCalendar(CalendarRequest(YearMonth.from(appDate), CalendarFilter.PTO)) },
+        )
         val nextPayday = paydays.firstOrNull { !it.isBefore(appDate) }
         if (!largeFont && nextPayday != null) {
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
@@ -238,25 +215,6 @@ internal fun HomeScreen(
                         Text("FRIDAY", style = MaterialTheme.typography.labelSmall, color = paydayColor)
                     }
                 }
-            }
-        }
-
-        HubPanel(Modifier.fillMaxWidth()) {
-            val nextBooked = app.hubhelper.domain.nextBookedPto(bookedPtoDays, appDate)
-            SectionLabel("Next booked vacation", color = design.pto)
-            if (nextBooked == null) {
-                Text("No upcoming PTO booked", style = MaterialTheme.typography.titleMedium)
-                Text("Scan an exception form or log a booked PTO date.", style = MaterialTheme.typography.bodySmall)
-            } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(nextBooked.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.pto)
-                    ProvenanceBadge(if (nextBooked.sourceDocumentId == null) "User" else "Source")
-                }
-                Text(when (nextBooked.type) {
-                    app.hubhelper.domain.BookedTimeType.REGULAR_PTO -> "Vacation day booked"
-                    app.hubhelper.domain.BookedTimeType.BIRTHDAY_FLOATING -> "Birthday-month floating holiday"
-                    app.hubhelper.domain.BookedTimeType.ANYTIME_FLOATING -> "Anytime floating holiday"
-                }, style = MaterialTheme.typography.bodySmall)
             }
         }
 
@@ -317,28 +275,105 @@ internal fun CallInPanel(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    HubPanel(modifier.clickable(onClick = onClick), accent = MaterialTheme.colorScheme.primary) {
-        SectionLabel("Call-ins", color = MaterialTheme.colorScheme.primary)
-        MetricValue(remaining.toString(), "LEFT", MaterialTheme.colorScheme.primary)
+    val color = when (app.hubhelper.domain.callInColorBand(remaining)) {
+        app.hubhelper.domain.CallInColorBand.GREEN -> HubThemeDesign.tokens.good
+        app.hubhelper.domain.CallInColorBand.ORANGE -> HubThemeDesign.tokens.attention
+        app.hubhelper.domain.CallInColorBand.RED -> MaterialTheme.colorScheme.error
+    }
+    HubPanel(modifier.clickable(onClick = onClick), accent = color) {
+        SectionLabel("Call-ins", color = color)
+        MetricValue(remaining.toString(), "LEFT", color)
     }
 }
 
 @Composable
-internal fun BalancePanel(
-    title: String,
-    balance: String,
-    unit: String,
-    color: Color,
+internal fun TimeOffPanel(
+    ptoBalance: String,
+    afterBookingsBalance: String,
+    upcomingPto: app.hubhelper.domain.UpcomingPtoSummary,
+    floatingRemaining: Int,
+    sickBalance: String,
+    ptoColor: Color,
+    sickColor: Color,
     modifier: Modifier,
     onClick: () -> Unit,
-    supporting: String? = null,
-    footer: String? = null,
 ) {
-    HubPanel(modifier.clickable(onClick = onClick), accent = color) {
-        SectionLabel(title, color = color)
-        MetricValue(balance, unit, color)
-        supporting?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        footer?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = color) }
+    val largeFont = LocalDensity.current.fontScale >= 1.3f
+    HubPanel(modifier.clickable(onClick = onClick), accent = ptoColor) {
+        SectionLabel("Time off")
+        Spacer(Modifier.height(8.dp))
+        SectionLabel("PTO", color = ptoColor)
+        MetricValue(ptoBalance, "HRS", ptoColor)
+        Text("Available today", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Spacer(Modifier.height(13.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        Spacer(Modifier.height(13.dp))
+        val afterBookings: @Composable (Modifier) -> Unit = { itemModifier ->
+            Column(itemModifier) {
+                SectionLabel("After bookings", color = ptoColor)
+                MetricValue(afterBookingsBalance, "HRS", ptoColor)
+            }
+        }
+        val upcomingBooked: @Composable (Modifier) -> Unit = { itemModifier ->
+            Column(itemModifier) {
+                SectionLabel("Upcoming booked")
+                MetricValue(upcomingPto.minutes.displayHours(), "HRS")
+                Text(
+                    when (upcomingPto.bookingCount) {
+                        0 -> "No approved days"
+                        1 -> "1 approved day"
+                        else -> "${upcomingPto.bookingCount} approved days"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                upcomingPto.nextDate?.let {
+                    Text("Next: ${it.monthDayYear()}", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        if (largeFont) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                afterBookings(Modifier.fillMaxWidth())
+                upcomingBooked(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                afterBookings(Modifier.weight(1f))
+                upcomingBooked(Modifier.weight(1f))
+            }
+        }
+
+        Spacer(Modifier.height(13.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        Spacer(Modifier.height(13.dp))
+        val floating: @Composable (Modifier) -> Unit = { itemModifier ->
+            Column(itemModifier) {
+                SectionLabel("Floating holidays", color = ptoColor)
+                MetricValue(floatingRemaining.toString(), "LEFT", ptoColor)
+            }
+        }
+        val sick: @Composable (Modifier) -> Unit = { itemModifier ->
+            Column(itemModifier) {
+                SectionLabel("Sick time", color = sickColor)
+                MetricValue(sickBalance, "HRS", sickColor)
+                Text("Left", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (largeFont) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                floating(Modifier.fillMaxWidth())
+                sick(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                floating(Modifier.weight(1f))
+                sick(Modifier.weight(1f))
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("OPEN PTO CALENDAR  ›", style = MaterialTheme.typography.labelLarge, color = ptoColor)
     }
 }
 

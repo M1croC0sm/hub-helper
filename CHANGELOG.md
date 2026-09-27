@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.2 — clearer time-off dashboard
+
+- Combine current PTO, approved upcoming PTO, post-booking PTO, floating
+  holidays, and sick time into one readable dashboard panel.
+- Remove the separate PTO projection date picker and opening-balance details
+  from the dashboard.
+- Color call-ins green with 5–4 remaining, orange with 3–2 remaining, and red
+  with 1–0 remaining.
+
 ## 0.12.1 — holiday schedule corrections
 
 - Correct second-shift holiday scheduling so adjacent Thursday/Friday holidays
