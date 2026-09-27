@@ -63,7 +63,9 @@ class HolidayCalendarParserTest {
 
     @Test fun `renames last working day before Christmas`() {
         val result = HolidayCalendarParser().parse("12/24/2026 Last working day before Christmas.", 2026)
-        assertEquals("Christmas", result.holidays.single().name)
+        assertEquals("Christmas Eve", result.holidays.single().name)
+        val earlier = HolidayCalendarParser().parse("12/23/2027 Last working day before Christmas.", 2027)
+        assertEquals("Christmas Holiday", earlier.holidays.single().name)
     }
 
     @Test fun `labels observed Independence Day when OCR only finds the date`() {

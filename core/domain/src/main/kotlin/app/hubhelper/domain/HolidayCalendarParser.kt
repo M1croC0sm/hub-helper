@@ -68,7 +68,9 @@ class HolidayCalendarParser {
     fun resolvedName(date: LocalDate, candidate: String?): String {
         val cleaned = candidate?.let(::cleanName).orEmpty()
         inferredFixedHolidayName(date)?.let { return it }
-        if (cleaned.equals("Last working day before Christmas", ignoreCase = true)) return "Christmas"
+        if (cleaned.equals("Last working day before Christmas", ignoreCase = true)) {
+            return if (date.dayOfMonth == 24) "Christmas Eve" else "Christmas Holiday"
+        }
         val generic = cleaned.isBlank() || cleaned.matches(
             Regex("(?:annual\\s+)?(?:plant\\s+)?holiday(?:\\s+calendar)?", RegexOption.IGNORE_CASE),
         )
@@ -94,7 +96,8 @@ class HolidayCalendarParser {
         date.monthValue == 9 && date.dayOfWeek.value == 1 && date.dayOfMonth <= 7 -> "Labor Day"
         date.monthValue == 11 && date.dayOfWeek.value == 4 && date.dayOfMonth in 22..28 -> "Thanksgiving Day"
         date.monthValue == 11 && date.dayOfWeek.value == 5 && date.minusDays(1).dayOfMonth in 22..28 -> "Friday after Thanksgiving"
-        date.monthValue == 12 && date.dayOfMonth in 20..24 -> "Christmas"
+        date.monthValue == 12 && date.dayOfMonth == 24 -> "Christmas Eve"
+        date.monthValue == 12 && date.dayOfMonth in 20..23 -> "Christmas Holiday"
         else -> null
     }
 

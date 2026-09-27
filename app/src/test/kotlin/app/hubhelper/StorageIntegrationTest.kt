@@ -61,6 +61,56 @@ class StorageIntegrationTest {
         db.documentPageDao().delete("doc")
         assertTrue(db.documentPageDao().search("vacation").isEmpty())
     }
+
+    @Test fun `generated holiday corrections update existing records without duplicate dates`() = runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+        val year = LocalDate.now().year + 1
+        db.holidayDao().insert(HolidayEntity(
+            dateEpochDay = LocalDate.of(year, 12, 24).toEpochDay(),
+            name = "Christmas",
+            origin = "CONTRACT",
+            stableId = "contract:$year:Christmas",
+        ))
+        HolidayRepository.create(context).ensureContractHolidays(year, secondShift = true)
+
+        val generated = db.holidayDao().getAll().filter { it.origin == "CONTRACT" && it.stableId.startsWith("contract:$year:") }
+        val expected = ContractHolidayCalculator.forYear(year, secondShift = true)
+        assertEquals(expected.size, generated.size)
+        assertEquals(expected.map { it.date }.toSet(), generated.map { LocalDate.ofEpochDay(it.dateEpochDay) }.toSet())
+        assertEquals(generated.size, generated.map { it.dateEpochDay }.distinct().size)
+        assertTrue(generated.none { it.name == "Christmas" })
+    }
+
+    @Test fun `legacy generated holiday collisions are corrected in place`() = runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+        val year = LocalDate.now().year + 1
+        val thanksgiving = LocalDate.of(year, 11, 1).with(java.time.temporal.TemporalAdjusters.dayOfWeekInMonth(4, java.time.DayOfWeek.THURSDAY))
+        db.holidayDao().insert(HolidayEntity(dateEpochDay = thanksgiving.toEpochDay(), name = "Thanksgiving Day"))
+        db.holidayDao().insert(HolidayEntity(dateEpochDay = thanksgiving.toEpochDay(), name = "Friday after Thanksgiving"))
+        db.holidayDao().insert(HolidayEntity(dateEpochDay = LocalDate.of(year, 12, 24).toEpochDay(), name = "Christmas"))
+
+        HolidayRepository.create(context).ensureContractHolidays(year, secondShift = true)
+
+        val expected = ContractHolidayCalculator.forYear(year, secondShift = true)
+        val stored = db.holidayDao().getAll()
+        listOf("Thanksgiving Day", "Friday after Thanksgiving", "Christmas Day").forEach { name ->
+            assertEquals(expected.single { it.name == name }.date, LocalDate.ofEpochDay(stored.single { it.name == name }.dateEpochDay))
+        }
+        val christmasHoliday = expected.single { it.name == "Christmas Eve" || it.name == "Christmas Holiday" }
+        assertEquals(christmasHoliday.date, LocalDate.ofEpochDay(stored.single { it.name == christmasHoliday.name }.dateEpochDay))
+        assertEquals(stored.size, stored.map { it.dateEpochDay }.distinct().size)
+    }
+
+    @Test fun `new years observed in prior calendar year remains a distinct holiday`() = runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+        val fridayNewYear = (LocalDate.now().year..LocalDate.now().year + 20).first {
+            LocalDate.of(it, 1, 1).dayOfWeek == java.time.DayOfWeek.FRIDAY
+        }
+        val repository = HolidayRepository.create(context)
+        repository.ensureContractHolidays(fridayNewYear - 1, secondShift = true)
+        repository.ensureContractHolidays(fridayNewYear, secondShift = true)
+
+        val newYears = db.holidayDao().getAll().filter { it.name == "New Year's Day" }
+        assertTrue(newYears.any { LocalDate.ofEpochDay(it.dateEpochDay) == LocalDate.of(fridayNewYear - 1, 1, 1) })
+        assertTrue(newYears.any { LocalDate.ofEpochDay(it.dateEpochDay) == LocalDate.of(fridayNewYear - 1, 12, 31) })
+    }
     @Test fun `backup restore is repeatable and missing original leaves ledger intact`() = runBlocking(kotlinx.coroutines.Dispatchers.IO) {
         SetupStore(db).save(SetupData(ptoBalanceHours = "40", paydayAnchor = "2026-09-04"))
         AttendanceRepository.create(context).add(LocalDate.of(2026, 9, 1), AttendanceEventType.TARDY, HalfPoints(1), AttendanceEventStatus.CONFIRMED, "synthetic")

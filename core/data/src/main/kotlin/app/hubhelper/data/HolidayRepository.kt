@@ -39,15 +39,38 @@ class HolidayRepository internal constructor(private val dao: HolidayDao, privat
 
     suspend fun ensureContractHolidays(year: Int, secondShift: Boolean) = database.withTransaction {
         val existing = dao.getAll()
-        ContractHolidayCalculator.forYear(year, secondShift).forEach { holiday ->
-            val identity = "contract:$year:${holiday.name}"
+        val calculated = ContractHolidayCalculator.forYear(year, secondShift)
+        calculated.forEach { holiday ->
+            // Keep the old "Christmas" identity so existing generated records are
+            // corrected in place when the clearer display label changes.
+            val identityName = if (holiday.name == "Christmas Eve" || holiday.name == "Christmas Holiday") "Christmas" else holiday.name
+            val identity = "contract:$year:$identityName"
             val saved = existing.firstOrNull { it.stableId == identity }
             if (saved == null) {
-                // Existing imported or legacy dates remain authoritative until reviewed.
-                val legacy = existing.firstOrNull { LocalDate.ofEpochDay(it.dateEpochDay).year == year && it.name == holiday.name }
-                if (legacy == null) dao.insert(HolidayEntity(dateEpochDay = holiday.date.toEpochDay(), name = holiday.name, stableId = identity, origin = "CONTRACT"))
-            } else if (!saved.suppressed && LocalDate.ofEpochDay(saved.dateEpochDay) >= LocalDate.now()) {
-                dao.update(saved.copy(dateEpochDay = holiday.date.toEpochDay()))
+                val aliases = if (identityName == "Christmas") setOf("Christmas", "Christmas Eve", "Christmas Holiday") else setOf(holiday.name)
+                val legacy = existing.firstOrNull {
+                    val legacyDate = LocalDate.ofEpochDay(it.dateEpochDay)
+                    it.name in aliases && (legacyDate == holiday.date || legacyDate.year == year)
+                }
+                val duplicatedThanksgiving = holiday.name in setOf("Thanksgiving Day", "Friday after Thanksgiving") &&
+                    existing.any { other ->
+                        other.id != legacy?.id && other.dateEpochDay == legacy?.dateEpochDay &&
+                            other.name in setOf("Thanksgiving Day", "Friday after Thanksgiving")
+                    }
+                val knownGeneratedLegacy = legacy != null && (identityName == "Christmas" || duplicatedThanksgiving)
+                when {
+                    knownGeneratedLegacy -> dao.update(legacy.copy(
+                        dateEpochDay = holiday.date.toEpochDay(),
+                        name = holiday.name,
+                        stableId = identity,
+                        origin = "CONTRACT",
+                    ))
+                    legacy == null -> dao.insert(HolidayEntity(dateEpochDay = holiday.date.toEpochDay(), name = holiday.name, stableId = identity, origin = "CONTRACT"))
+                    // A nonmatching legacy/imported date remains authoritative until reviewed.
+                    else -> Unit
+                }
+            } else if (LocalDate.ofEpochDay(saved.dateEpochDay) >= LocalDate.now()) {
+                dao.update(saved.copy(dateEpochDay = holiday.date.toEpochDay(), name = holiday.name))
             }
         }
     }

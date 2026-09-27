@@ -15,7 +15,9 @@ are reliable.
 
 ## Project status
 
-Version 0.12.0 adds transactional setup/call-in state, reviewed end-of-day attendance
+Version 0.12.1 adds corrected collision-aware holiday scheduling for both shifts,
+including New Year's year boundaries and clear Christmas holiday labels. Version
+0.12.0 added transactional setup/call-in state, reviewed end-of-day attendance
 reconciliation, durable booking durations and cancellation, linked actual usage,
 PTO projections, multi-page PDF/image viewing, resumable OCR, page search and source
 links, and validated format-7 backup Merge/Replace with recovery journals.

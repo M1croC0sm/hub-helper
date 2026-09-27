@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.1 — holiday schedule corrections
+
+- Correct second-shift holiday scheduling so adjacent Thursday/Friday holidays
+  occupy consecutive workdays instead of creating duplicate calendar markers.
+- Correct New Year's observance across calendar-year boundaries.
+- Label the last working day before Christmas **Christmas Eve** when it is
+  December 24 and **Christmas Holiday** when it falls earlier.
+- Correct existing future contract-generated holiday records in place while
+  preserving user overrides and suppressed holidays.
+
 ## 0.12.0 — reliability and evidence workflows
 
 - Repair backup compatibility, add validated format-7 Merge/Replace, stable record
