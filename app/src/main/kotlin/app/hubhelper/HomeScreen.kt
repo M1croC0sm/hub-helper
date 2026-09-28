@@ -219,33 +219,30 @@ internal fun HomeScreen(
             }
         }
 
-        HubPanel(
-            Modifier
-                .fillMaxWidth()
-                .clickable {
-                    val nextDate = listOfNotNull(nextBookedTimeOff?.date, nextHoliday?.date).minOrNull() ?: appDate
-                    onViewCalendar(
-                        CalendarRequest(YearMonth.from(nextDate), CalendarFilter.ALL),
-                    )
-                },
-        ) {
-            SectionLabel("Next time off")
-            Spacer(Modifier.height(8.dp))
+        HubPanel(Modifier.fillMaxWidth()) {
             SectionLabel("Booked time off", color = design.attention)
             if (nextBookedTimeOff == null) {
-                Text("No approved time off booked", style = MaterialTheme.typography.titleMedium)
+                Text("Nothing Booked", style = MaterialTheme.typography.titleLarge)
             } else {
-                Text(nextBookedTimeOff.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.attention)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        when (nextBookedTimeOff.type) {
+                            app.hubhelper.domain.BookedTimeType.REGULAR_PTO -> "PTO"
+                            app.hubhelper.domain.BookedTimeType.BIRTHDAY_FLOATING,
+                            app.hubhelper.domain.BookedTimeType.ANYTIME_FLOATING -> "Floating Holiday"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(nextBookedTimeOff.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.attention)
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    when (nextBookedTimeOff.type) {
-                        app.hubhelper.domain.BookedTimeType.REGULAR_PTO -> {
-                            val minutes = nextBookedTimeOff.durationMinutes.takeIf { it > 0 } ?: ptoWarningAt * 60
-                            "${app.hubhelper.domain.Minutes(minutes.toLong()).displayHours()} PTO hours"
-                        }
-                        app.hubhelper.domain.BookedTimeType.BIRTHDAY_FLOATING -> "Birthday floating holiday"
-                        app.hubhelper.domain.BookedTimeType.ANYTIME_FLOATING -> "Anytime floating holiday"
+                    "OPEN CALENDAR  ›",
+                    modifier = Modifier.clickable {
+                        onViewCalendar(CalendarRequest(YearMonth.from(nextBookedTimeOff.date), CalendarFilter.PTO))
                     },
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
 
@@ -261,9 +258,16 @@ internal fun HomeScreen(
                     Text(nextHoliday.name.uppercase(), style = MaterialTheme.typography.titleLarge)
                     Text(nextHoliday.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.attention)
                 }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "OPEN CALENDAR  ›",
+                    modifier = Modifier.clickable {
+                        onViewCalendar(CalendarRequest(YearMonth.from(nextHoliday.date), CalendarFilter.ALL))
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
-            Spacer(Modifier.height(10.dp))
-            Text("OPEN CALENDAR  ›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
 
         HubPanel(

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.5 — clearer booked time off
+
+- Present booked PTO and floating holidays in the same title/date layout as
+  plant holidays, with the booked date aligned at right.
+- Show **Nothing Booked** when there is no approved booking, and add direct
+  calendar actions for booked time off and plant holidays.
+
 ## 0.12.4 — consistent next time off styling
 
 - Match the booked PTO label and date styling to the adjacent plant-holiday
