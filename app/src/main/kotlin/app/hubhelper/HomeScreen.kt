@@ -231,11 +231,11 @@ internal fun HomeScreen(
         ) {
             SectionLabel("Next time off")
             Spacer(Modifier.height(8.dp))
-            SectionLabel("Booked time off", color = design.pto)
+            SectionLabel("Booked time off", color = design.attention)
             if (nextBookedTimeOff == null) {
                 Text("No approved time off booked", style = MaterialTheme.typography.titleMedium)
             } else {
-                Text(nextBookedTimeOff.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.pto)
+                Text(nextBookedTimeOff.date.monthDayYear(), style = MaterialTheme.typography.titleLarge, color = design.attention)
                 Text(
                     when (nextBookedTimeOff.type) {
                         app.hubhelper.domain.BookedTimeType.REGULAR_PTO -> {

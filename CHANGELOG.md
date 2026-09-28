@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.4 — consistent next time off styling
+
+- Match the booked PTO label and date styling to the adjacent plant-holiday
+  summary in the **Next time off** dashboard panel.
+
 ## 0.12.3 — next time off at a glance
 
 - Show the next approved PTO or floating-holiday booking together with the next
