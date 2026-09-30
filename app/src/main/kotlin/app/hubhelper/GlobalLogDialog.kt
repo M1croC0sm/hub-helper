@@ -130,7 +130,11 @@ fun GlobalLogDialog(
                             callInYear = appDate.year,
                             onSelect = { step = it },
                         )
-                        LogStep.ATTENDANCE -> QuickAttendanceForm(appDate) { date, type, points, status, note ->
+                        LogStep.ATTENDANCE -> QuickAttendanceForm(
+                            appDate = appDate,
+                            callInsRemaining = callInsRemainingForYear(appDate.year),
+                            onCallIn = { step = LogStep.CALL_IN },
+                        ) { date, type, points, status, note ->
                             onAttendance(date, type, points, status, note)
                         }
                         LogStep.TIME -> QuickTimeForm(appDate, shiftPreset, birthdayMonth, timeAdjustments, bookedPtoDays, floatingAllowance) { date, kind, minutes, note, bookingId ->
@@ -354,7 +358,7 @@ private fun QuickCallInForm(
             FilterChip(bookingId == booking.stableId, { bookingId = if (bookingId == booking.stableId) null else booking.stableId }, label = { Text("Replace booked PTO deduction") })
         }
         Text("This records an excused call-in day and deducts $ptoHours PTO hours for your ${if (shiftPreset == "SECOND") "second" else "first"} shift.")
-        Text("It does not add an attendance point.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Adds 0 attendance points.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(
             onClick = { onSave(date, ptoHours * 60, bookingId) },
             enabled = remaining > 0,
@@ -396,6 +400,8 @@ private fun LogMenuButton(
 @Composable
 private fun QuickAttendanceForm(
     appDate: LocalDate,
+    callInsRemaining: Int,
+    onCallIn: () -> Unit,
     onSave: (LocalDate, AttendanceEventType, HalfPoints, AttendanceEventStatus, String?) -> Unit,
 ) {
     var date by remember { mutableStateOf(appDate) }
@@ -415,13 +421,27 @@ private fun QuickAttendanceForm(
         AttendanceEventType.entries.filterNot { it == AttendanceEventType.ATTENDANCE_CREDIT }.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 row.forEach { option ->
+                    val callIn = option == AttendanceEventType.CALL_IN_VIOLATION
                     FilterChip(
                         selected = type == option,
                         onClick = {
-                            type = option
-                            pointText = if (option == AttendanceEventType.UNEXCUSED_ABSENCE) "1" else "0.5"
+                            if (callIn) {
+                                onCallIn()
+                            } else {
+                                type = option
+                                pointText = if (option == AttendanceEventType.UNEXCUSED_ABSENCE) "1" else "0.5"
+                            }
                         },
-                        label = { Text(shortType(option)) },
+                        enabled = !callIn || callInsRemaining > 0,
+                        label = {
+                            Text(
+                                if (callIn) {
+                                    if (callInsRemaining > 0) "Call-in (0 points)" else "Call-in (none left)"
+                                } else {
+                                    shortType(option)
+                                },
+                            )
+                        },
                     )
                 }
             }
