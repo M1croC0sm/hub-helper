@@ -55,7 +55,6 @@ fun InitialSetupScreen(
     var sickBalance by remember(initialData) { mutableStateOf(sickDaysFromHours(initialData.sickBalanceHours)) }
     var currentPoints by remember(initialData) { mutableStateOf(initialData.currentAttendancePoints) }
     var callInsRemaining by remember(initialData) { mutableStateOf(initialData.callInsRemaining) }
-    var shiftEffectiveDate by rememberSaveable { mutableStateOf(runCatching { LocalDate.parse(initialData.shiftEffectiveDate) }.getOrDefault(LocalDate.now())) }
     var shiftPreset by remember(initialData) { mutableStateOf(initialData.shiftPreset) }
     var pointsSheetUris by remember(initialData) {
         mutableStateOf(initialData.pointsSheetUri?.lineSequence()?.filter(String::isNotBlank)?.toList().orEmpty())
@@ -113,7 +112,6 @@ fun InitialSetupScreen(
                         label = { Text("Second shift") },
                     )
                 }
-                DatePickerField("Shift effective from", shiftEffectiveDate, { it?.let { date -> shiftEffectiveDate = date } })
                 DatePickerField("Hire date", hireDate, { selected ->
                     if (selected == null || !selected.isAfter(LocalDate.now())) hireDate = selected
                 }, allowClear = true)
@@ -214,7 +212,11 @@ fun InitialSetupScreen(
                                     pointsSheetUris.joinToString("\n") == initialData.pointsSheetUri
                                 ) initialData.attendanceOpeningRemainder else currentPoints.trim(),
                                 shiftPreset = shiftPreset,
-                                shiftEffectiveDate = shiftEffectiveDate.toString(),
+                                shiftEffectiveDate = if (shiftPreset != initialData.shiftPreset || initialData.shiftEffectiveDate.isBlank()) {
+                                    LocalDate.now().toString()
+                                } else {
+                                    initialData.shiftEffectiveDate
+                                },
                                 pointsSheetUri = pointsSheetUris.takeIf { it.isNotEmpty() }?.joinToString("\n"),
                                 hireDate = hireDate?.toString().orEmpty(),
                                 balancesAsOfDate = initialData.balancesAsOfDate,
