@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -125,6 +126,8 @@ fun GlobalLogDialog(
                     when (step) {
                         LogStep.MENU -> LogMenu(
                             hasFloatingEntries = floatingHolidayEntries(timeAdjustments, bookedPtoDays).isNotEmpty(),
+                            callInsRemaining = callInsRemainingForYear(appDate.year),
+                            callInYear = appDate.year,
                             onSelect = { step = it },
                         )
                         LogStep.ATTENDANCE -> QuickAttendanceForm(appDate) { date, type, points, status, note ->
@@ -175,7 +178,12 @@ private fun logStepTitle(step: LogStep): String = when (step) {
 }
 
 @Composable
-private fun LogMenu(hasFloatingEntries: Boolean, onSelect: (LogStep) -> Unit) {
+private fun LogMenu(
+    hasFloatingEntries: Boolean,
+    callInsRemaining: Int,
+    callInYear: Int,
+    onSelect: (LogStep) -> Unit,
+) {
     val design = HubThemeDesign.tokens
     Column(verticalArrangement = Arrangement.spacedBy(design.contentSpacing)) {
         SectionLabel("What happened?", color = MaterialTheme.colorScheme.primary)
@@ -185,7 +193,17 @@ private fun LogMenu(hasFloatingEntries: Boolean, onSelect: (LogStep) -> Unit) {
         LogMenuButton("▱", design.document, "Scan / import document", "Add a photo or document") { onSelect(LogStep.DOCUMENT) }
         LogMenuButton("✓", design.good, "My week is up to date", "Mark weekly review complete") { onSelect(LogStep.WEEK_DONE) }
         SectionLabel("More log options")
-        LogMenuButton("☎", design.attention, "Call-in day", "Use one excused call-in and one PTO day") { onSelect(LogStep.CALL_IN) }
+        LogMenuButton(
+            icon = "☎",
+            color = design.attention,
+            title = "Call-in day",
+            detail = if (callInsRemaining > 0) {
+                "Use one excused call-in, add 0 attendance points, and use one PTO day"
+            } else {
+                "No call-ins left for $callInYear • adds 0 attendance points"
+            },
+            enabled = callInsRemaining > 0,
+        ) { onSelect(LogStep.CALL_IN) }
         LogMenuButton("＋", design.pto, "Book future PTO", "Remember a future vacation day") { onSelect(LogStep.BOOKED_PTO) }
         LogMenuButton(
             "−",
@@ -346,8 +364,20 @@ private fun QuickCallInForm(
 }
 
 @Composable
-private fun LogMenuButton(icon: String, color: androidx.compose.ui.graphics.Color, title: String, detail: String, onClick: () -> Unit) {
-    HubPanel(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+private fun LogMenuButton(
+    icon: String,
+    color: androidx.compose.ui.graphics.Color,
+    title: String,
+    detail: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    HubPanel(
+        Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.5f)
+            .clickable(enabled = enabled, onClick = onClick),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Surface(shape = CircleShape, color = color.copy(alpha = 0.18f), modifier = Modifier.size(42.dp)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
