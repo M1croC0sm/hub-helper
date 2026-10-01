@@ -124,7 +124,8 @@ fun DocumentLibraryScreen(
         }
     }
     val matchingIds = model.results.map { it.documentId }.toSet()
-    val visible = documents.filter { (filter == null || it.category == filter) && (query.isBlank() || it.title.contains(query, true) || it.id in matchingIds) }
+    val activeDocuments = documents.filterNot { it.originalDeleted }
+    val visible = activeDocuments.filter { (filter == null || it.category == filter) && (query.isBlank() || it.title.contains(query, true) || it.id in matchingIds) }
 
     Column(
         modifier = Modifier
@@ -151,12 +152,17 @@ fun DocumentLibraryScreen(
             }
         }
         Text("Saved documents", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        if (visible.isEmpty()) Text(if (documents.isEmpty()) "No documents added yet." else "Nothing matched your search.")
+        if (visible.isEmpty()) Text(if (activeDocuments.isEmpty()) "No documents added yet." else "Nothing matched your search.")
         visible.forEach { document ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(document.title, fontWeight = FontWeight.SemiBold)
                     Text("${friendlyCategory(document.category)} • ${friendlyTextStatus(document)}")
+                    val ocrError by produceState<String?>(null, document.id, document.ocrStatus) {
+                        value = app.hubhelper.data.HubHelperDatabase.get(context).documentPageDao().pages(document.id)
+                            .firstOrNull { it.status == "FAILED" }?.error
+                    }
+                    if (!ocrError.isNullOrBlank()) Text("OCR error: $ocrError", color = MaterialTheme.colorScheme.error)
                     OutlinedButton(onClick = { requestedPage = 0; viewingDocument = document }, modifier = Modifier.fillMaxWidth()) { Text("VIEW DOCUMENT AND OCR") }
                     if (document.originalDeleted) Text("Original deleted. Linked records keep this source identity.")
                     else Row {

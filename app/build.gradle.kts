@@ -11,8 +11,8 @@ android {
         applicationId = "app.hubhelper"
         minSdk = 26
         targetSdk = 36
-        versionCode = 49
-        versionName = "0.12.8"
+        versionCode = 50
+        versionName = "0.12.9"
     }
 
     buildTypes {

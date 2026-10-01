@@ -40,7 +40,7 @@ class DocumentRepository internal constructor(
         val originalName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         } ?: "Imported document"
-        val mimeType = resolver.getType(uri) ?: "application/octet-stream"
+        val mimeType = normalizedDocumentMimeType(resolver.getType(uri), originalName)
         val id = UUID.randomUUID().toString()
         val extension = originalName.substringAfterLast('.', "bin").takeIf { it.matches(Regex("[A-Za-z0-9]{1,10}")) } ?: "bin"
         val directory = File(context.filesDir, "documents").apply { mkdirs() }
@@ -84,10 +84,11 @@ class DocumentRepository internal constructor(
         try {
             ZipOutputStream(destination.outputStream()).use { zip ->
                 uris.forEachIndexed { index, uri ->
+                    val reportedMimeType = resolver.getType(uri)
                     val sourceName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) cursor.getString(0) else null
-                    } ?: "page-${index + 1}.jpg"
-                    val extension = sourceName.substringAfterLast('.', "jpg").takeIf { it.matches(Regex("[A-Za-z0-9]{1,10}")) } ?: "bin"
+                    } ?: "page-${index + 1}"
+                    val extension = supportedDocumentExtension(sourceName, reportedMimeType)
                     zip.putNextEntry(ZipEntry("page-${(index + 1).toString().padStart(3, '0')}.$extension"))
                     resolver.openInputStream(uri).use { input ->
                         requireNotNull(input) { "Unable to read page ${index + 1}" }
@@ -190,6 +191,32 @@ class DocumentRepository internal constructor(
         }
     }
 
+}
+
+internal fun normalizedDocumentMimeType(reportedMimeType: String?, originalName: String): String {
+    val reported = reportedMimeType?.substringBefore(';')?.trim()?.lowercase()
+    val extension = originalName.substringAfterLast('.', "").lowercase()
+    return when {
+        reported == "application/pdf" || reported?.startsWith("image/") == true -> reported
+        extension == "pdf" -> "application/pdf"
+        extension in setOf("jpg", "jpeg") -> "image/jpeg"
+        extension == "png" -> "image/png"
+        extension == "webp" -> "image/webp"
+        extension in setOf("heic", "heif") -> "image/heic"
+        else -> reported ?: "application/octet-stream"
+    }
+}
+
+private fun supportedDocumentExtension(originalName: String, reportedMimeType: String?): String {
+    val extension = originalName.substringAfterLast('.', "").lowercase()
+    if (extension in setOf("pdf", "jpg", "jpeg", "png", "webp", "heic", "heif")) return extension
+    return when (normalizedDocumentMimeType(reportedMimeType, originalName)) {
+        "application/pdf" -> "pdf"
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/heic", "image/heif" -> "heic"
+        else -> "jpg"
+    }
 }
 
 private fun DocumentEntity.toDomain() = WorkDocument(
